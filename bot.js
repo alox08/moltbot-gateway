@@ -4,7 +4,7 @@ const { QdrantClient } = require('@qdrant/js-client-rest');
 // ─── Архіваріус ────────────────────────────────────────────────────────────
 
 const COLLECTION = 'moltbot_memory';
-const VECTOR_SIZE = 768; // розмір векторів Jina
+const VECTOR_SIZE = 1024; // розмір векторів Jina v3
 
 const qdrant = new QdrantClient({
   url: process.env.QDRANT_URL,
@@ -14,15 +14,15 @@ const qdrant = new QdrantClient({
 async function initCollection() {
   try {
     const collections = await qdrant.getCollections();
-    const exists = collections.collections.some(c => c.name === COLLECTION);
-    if (!exists) {
-      await qdrant.createCollection(COLLECTION, {
-        vectors: { size: VECTOR_SIZE, distance: 'Cosine' },
-      });
-      console.log(`📚 Архіваріус: колекцію "${COLLECTION}" створено`);
-    } else {
-      console.log(`📚 Архіваріус: колекція "${COLLECTION}" вже існує`);
+    const existing = collections.collections.find(c => c.name === COLLECTION);
+    if (existing) {
+      await qdrant.deleteCollection(COLLECTION);
+      console.log(`📚 Архіваріус: стару колекцію видалено`);
     }
+    await qdrant.createCollection(COLLECTION, {
+      vectors: { size: VECTOR_SIZE, distance: 'Cosine' },
+    });
+    console.log(`📚 Архіваріус: колекцію "${COLLECTION}" створено (${VECTOR_SIZE}d)`);
   } catch (e) {
     console.error('Архіваріус initCollection помилка:', e.message);
   }
