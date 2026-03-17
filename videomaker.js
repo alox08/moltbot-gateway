@@ -35,12 +35,13 @@ function downloadFile(url, dest, timeoutMs = 25000) {
 }
 
 function createFallbackImage(index, dest) {
-  // Створюємо кольоровий фон через FFmpeg як запасний варіант
-  const colors = ['#0d1b2a', '#1b2838', '#162032', '#0a1628'];
+  const colors = ['0x0d1b2a', '0x1b2838', '0x162032', '0x0a1628'];
   const color = colors[index % colors.length];
-  const hex = color.replace('#', '0x');
-  execSync(`ffmpeg -y -f lavfi -i "color=c=${hex}:size=576x1024" -frames:v 1 "${dest}" 2>/dev/null`);
+  // PNG формат — без JPEG артефактів
+  const pngDest = dest.replace('.jpg', '.png');
+  execSync(`ffmpeg -y -f lavfi -i "color=c=${color}:size=576x1024" -frames:v 1 "${pngDest}"`, { stdio: 'pipe' });
   console.log(`🎨 Fallback: кольоровий фон для зображення ${index}`);
+  return pngDest;
 }
 
 // ─── Генерація зображень через Replicate (FLUX Schnell) ────────────────────
@@ -62,11 +63,14 @@ async function generateImages(prompts) {
       await downloadFile(url, dest);
       console.log(`🎨 Зображення ${i + 1}/${limited.length} готове`);
     } catch (e) {
-      console.warn(`🎨 Pollinations не відповів (${e.message}), використовую fallback...`);
-      try { createFallbackImage(i, dest); } catch (fe) {
+      console.warn(`🎨 Pollinations не відповів (${e.message.substring(0, 40)}), fallback...`);
+      try {
+        const fallbackDest = createFallbackImage(i, dest);
+        imageFiles.push(fallbackDest);
+      } catch (fe) {
         console.error(`🎨 Fallback теж не вдався:`, fe.message);
-        continue;
       }
+      continue;
     }
     imageFiles.push(dest);
   }
@@ -118,16 +122,17 @@ function assembleVideo(imageFiles, audioFile, outputFile) {
   fs.writeFileSync(listFile, listContent);
 
   const cmd = [
-    'ffmpeg -y',
+    'ffmpeg -y -loglevel error',
     `-f concat -safe 0 -i "${listFile}"`,
     `-i "${audioFile}"`,
-    '-c:v libx264 -c:a aac -shortest',
-    '-vf "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920"',
+    '-c:v libx264 -preset ultrafast -crf 28 -threads 1',
+    '-c:a aac -shortest',
+    '-vf "scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280"',
     `"${outputFile}"`,
   ].join(' ');
 
-  console.log('🎬 Монтую відео...');
-  execSync(cmd, { stdio: 'pipe', timeout: 120000 });
+  console.log('🎬 Монтую відео (720x1280, ultrafast)...');
+  execSync(cmd, { stdio: 'pipe', timeout: 180000 });
   console.log('🎬 Відео готове!');
 }
 
