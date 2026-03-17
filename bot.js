@@ -41,7 +41,7 @@ client.on('messageCreate', async (message) => {
         'X-Title': 'MoltBot',
       },
       body: JSON.stringify({
-        model: 'meta-llama/llama-3.3-70b-instruct:free',
+        model: 'mistralai/mistral-7b-instruct:free',
         messages: [
           { role: 'system', content: SYSTEM_PROMPT },
           { role: 'user', content: userMessage }
