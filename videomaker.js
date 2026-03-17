@@ -28,29 +28,49 @@ function downloadFile(url, dest) {
 
 // ─── Генерація зображень через Replicate (FLUX Schnell) ────────────────────
 
-async function generateImages(prompts) {
-  const imageFiles = [];
-  console.log(`🎨 Генерую ${prompts.length} зображень...`);
-
-  for (let i = 0; i < prompts.length; i++) {
+async function generateOneImage(prompt, index, retries = 3) {
+  for (let attempt = 0; attempt < retries; attempt++) {
     try {
       const output = await replicate.run(
         'black-forest-labs/flux-schnell',
-        { input: { prompt: prompts[i], num_outputs: 1, aspect_ratio: '9:16' } }
+        { input: { prompt, num_outputs: 1, aspect_ratio: '9:16' } }
       );
-
-      // Replicate може повернути рядок, масив рядків або FileOutput об'єкт
       const raw = Array.isArray(output) ? output[0] : output;
       const url = (raw && typeof raw === 'object' && typeof raw.url === 'function')
         ? raw.url()
         : String(raw);
-
-      const dest = `/tmp/img_${i}.jpg`;
+      const dest = `/tmp/img_${index}.jpg`;
       await downloadFile(url, dest);
-      imageFiles.push(dest);
-      console.log(`🎨 Зображення ${i + 1}/${prompts.length} готове`);
+      return dest;
     } catch (e) {
-      console.error(`🎨 Помилка зображення ${i}:`, e.message);
+      const is429 = e.message && e.message.includes('429');
+      const waitSec = is429 ? 15 : 5;
+      console.warn(`🎨 Спроба ${attempt + 1} зображення ${index} невдала: ${e.message.substring(0, 80)}`);
+      if (attempt < retries - 1) {
+        console.log(`⏳ Чекаю ${waitSec}с перед повтором...`);
+        await new Promise(r => setTimeout(r, waitSec * 1000));
+      }
+    }
+  }
+  return null;
+}
+
+async function generateImages(prompts) {
+  const imageFiles = [];
+  // Обмежуємо до 3 зображень щоб не перевищувати rate limit
+  const limited = prompts.slice(0, 3);
+  console.log(`🎨 Генерую ${limited.length} зображень (послідовно через rate limit)...`);
+
+  for (let i = 0; i < limited.length; i++) {
+    const dest = await generateOneImage(limited[i], i);
+    if (dest) {
+      imageFiles.push(dest);
+      console.log(`🎨 Зображення ${i + 1}/${limited.length} готове`);
+    }
+    // Пауза між запитами щоб не словити 429
+    if (i < limited.length - 1) {
+      console.log('⏳ Пауза 12с між зображеннями...');
+      await new Promise(r => setTimeout(r, 12000));
     }
   }
   return imageFiles;
