@@ -1,7 +1,6 @@
 const Replicate = require('replicate');
 const { execSync, exec } = require('child_process');
 const fs = require('fs');
-const path = require('path');
 const https = require('https');
 const http = require('http');
 
@@ -14,6 +13,10 @@ function downloadFile(url, dest) {
     const file = fs.createWriteStream(dest);
     const lib = url.startsWith('https') ? https : http;
     lib.get(url, res => {
+      if (res.statusCode !== 200) {
+        reject(new Error(`HTTP ${res.statusCode} для ${url}`));
+        return;
+      }
       res.pipe(file);
       file.on('finish', () => file.close(resolve));
     }).on('error', err => {
@@ -23,7 +26,7 @@ function downloadFile(url, dest) {
   });
 }
 
-// ─── Генерація зображень через Replicate (FLUX) ────────────────────────────
+// ─── Генерація зображень через Replicate (FLUX Schnell) ────────────────────
 
 async function generateImages(prompts) {
   const imageFiles = [];
@@ -35,9 +38,15 @@ async function generateImages(prompts) {
         'black-forest-labs/flux-schnell',
         { input: { prompt: prompts[i], num_outputs: 1, aspect_ratio: '9:16' } }
       );
-      const url = Array.isArray(output) ? output[0] : output;
+
+      // Replicate може повернути рядок, масив рядків або FileOutput об'єкт
+      const raw = Array.isArray(output) ? output[0] : output;
+      const url = (raw && typeof raw === 'object' && typeof raw.url === 'function')
+        ? raw.url()
+        : String(raw);
+
       const dest = `/tmp/img_${i}.jpg`;
-      await downloadFile(url.url ? url.url() : url, dest);
+      await downloadFile(url, dest);
       imageFiles.push(dest);
       console.log(`🎨 Зображення ${i + 1}/${prompts.length} готове`);
     } catch (e) {
@@ -47,16 +56,19 @@ async function generateImages(prompts) {
   return imageFiles;
 }
 
-// ─── Озвучка через edge-tts ────────────────────────────────────────────────
+// ─── Озвучка через edge-tts (Python CLI) ──────────────────────────────────
 
 async function generateVoice(text, outputFile) {
   return new Promise((resolve, reject) => {
-    // Використовуємо edge-tts через CLI якщо доступний, інакше через npm
-    const cmd = `npx edge-tts --voice uk-UA-OstapNeural --text "${text.replace(/"/g, "'")}" --write-media ${outputFile}`;
-    exec(cmd, (err) => {
+    // Обрізаємо текст до розумного розміру для TTS
+    const safeText = text.substring(0, 400).replace(/"/g, "'").replace(/\n/g, ' ');
+    const cmd = `edge-tts --voice uk-UA-OstapNeural --text "${safeText}" --write-media ${outputFile}`;
+    console.log('🎙 Запускаю edge-tts...');
+    exec(cmd, { timeout: 60000 }, (err, stdout, stderr) => {
       if (err) {
         console.error('TTS помилка:', err.message);
-        reject(err);
+        console.error('TTS stderr:', stderr);
+        reject(new Error(`edge-tts: ${err.message}`));
       } else {
         console.log('🎙 Озвучка готова');
         resolve();
@@ -67,31 +79,39 @@ async function generateVoice(text, outputFile) {
 
 // ─── Монтаж відео через FFmpeg ─────────────────────────────────────────────
 
-function assembleVideo(imageFiles, audioFile, outputFile) {
-  if (imageFiles.length === 0) throw new Error('Немає зображень для монтажу');
-
-  // Тривалість кожного зображення = загальна тривалість / кількість зображень
-  const audioDuration = getAudioDuration(audioFile);
-  const imgDuration = Math.max(2, audioDuration / imageFiles.length);
-
-  // Створюємо список зображень для FFmpeg
-  const listFile = '/tmp/images.txt';
-  const listContent = imageFiles.map(f => `file '${f}'\nduration ${imgDuration.toFixed(2)}`).join('\n');
-  fs.writeFileSync(listFile, listContent);
-
-  const cmd = `ffmpeg -y -f concat -safe 0 -i ${listFile} -i ${audioFile} -c:v libx264 -c:a aac -shortest -vf "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920" ${outputFile}`;
-  console.log('🎬 Монтую відео...');
-  execSync(cmd, { stdio: 'pipe' });
-  console.log('🎬 Відео готове!');
-}
-
 function getAudioDuration(audioFile) {
   try {
-    const result = execSync(`ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 ${audioFile}`).toString().trim();
+    const result = execSync(
+      `ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${audioFile}"`
+    ).toString().trim();
     return parseFloat(result) || 30;
   } catch {
     return 30;
   }
+}
+
+function assembleVideo(imageFiles, audioFile, outputFile) {
+  if (imageFiles.length === 0) throw new Error('Немає зображень для монтажу');
+
+  const audioDuration = getAudioDuration(audioFile);
+  const imgDuration = Math.max(2, audioDuration / imageFiles.length);
+
+  const listFile = '/tmp/images.txt';
+  const listContent = imageFiles.map(f => `file '${f}'\nduration ${imgDuration.toFixed(2)}`).join('\n');
+  fs.writeFileSync(listFile, listContent);
+
+  const cmd = [
+    'ffmpeg -y',
+    `-f concat -safe 0 -i "${listFile}"`,
+    `-i "${audioFile}"`,
+    '-c:v libx264 -c:a aac -shortest',
+    '-vf "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920"',
+    `"${outputFile}"`,
+  ].join(' ');
+
+  console.log('🎬 Монтую відео...');
+  execSync(cmd, { stdio: 'pipe', timeout: 120000 });
+  console.log('🎬 Відео готове!');
 }
 
 // ─── Головна функція ───────────────────────────────────────────────────────
@@ -101,22 +121,21 @@ async function makeShortVideo(script) {
   fs.mkdirSync(workDir, { recursive: true });
 
   try {
-    // 1. Витягуємо текст для озвучки і промпти для зображень з скрипту
     const voiceText = extractVoiceText(script);
     const imagePrompts = extractImagePrompts(script);
 
-    console.log(`📝 Текст озвучки: ${voiceText.substring(0, 100)}...`);
+    console.log(`📝 Текст озвучки (${voiceText.length} символів): ${voiceText.substring(0, 80)}...`);
     console.log(`🖼 Промптів для зображень: ${imagePrompts.length}`);
 
-    // 2. Генеруємо зображення
-    const imageFiles = await generateImages(imagePrompts);
+    // Паралельно генеруємо зображення і озвучку
+    const audioFile = `${workDir}/voice.mp3`;
+    const [imageFiles] = await Promise.all([
+      generateImages(imagePrompts),
+      generateVoice(voiceText, audioFile),
+    ]);
+
     if (imageFiles.length === 0) throw new Error('Не вдалось згенерувати зображення');
 
-    // 3. Генеруємо озвучку
-    const audioFile = `${workDir}/voice.mp3`;
-    await generateVoice(voiceText, audioFile);
-
-    // 4. Монтуємо відео
     const outputFile = `${workDir}/short.mp4`;
     assembleVideo(imageFiles, audioFile, outputFile);
 
@@ -130,7 +149,6 @@ async function makeShortVideo(script) {
 // ─── Парсинг скрипту ───────────────────────────────────────────────────────
 
 function extractVoiceText(script) {
-  // Витягуємо текст між секціями сценарію (без технічних міток)
   const lines = script.split('\n');
   const voiceLines = lines.filter(l => {
     const clean = l.trim();
@@ -141,34 +159,45 @@ function extractVoiceText(script) {
       && !clean.startsWith('🎬')
       && !clean.startsWith('⏱')
       && !clean.startsWith('🎯')
+      && !clean.startsWith('🎭')
+      && !clean.startsWith('📖')
+      && !clean.startsWith('#️⃣')
       && !clean.startsWith('[')
       && !clean.match(/^\d+-\d+с/);
   });
-  return voiceLines.join(' ').replace(/\*\*/g, '').substring(0, 500);
+  return voiceLines.join(' ').replace(/\*\*/g, '').replace(/\*/g, '').trim();
 }
 
 function extractImagePrompts(script) {
-  // Генеруємо промпти на основі теми скрипту
-  // Базові промпти + специфічні з секції 📸
   const baseStyle = 'cinematic, photorealistic, 8k, dramatic lighting, vertical format 9:16';
+  const dinoTheme = `prehistoric era, dinosaurs and early humans, ${baseStyle}`;
   const prompts = [];
 
-  // Шукаємо секцію КАДРИ
+  // Шукаємо секцію КАДРИ (📸)
   const cadryMatch = script.match(/📸[^:]*:([\s\S]*?)(?=🎵|#️⃣|$)/);
   if (cadryMatch) {
-    const cadryText = cadryMatch[1];
-    const lines = cadryText.split('\n').filter(l => l.trim().length > 5);
+    const lines = cadryMatch[1].split('\n').filter(l => l.trim().length > 5);
     lines.slice(0, 6).forEach(line => {
-      prompts.push(`${line.trim()}, ${baseStyle}`);
+      const clean = line.trim().replace(/^[-•*]\s*/, '');
+      prompts.push(`${clean}, ${baseStyle}`);
     });
   }
 
-  // Якщо промптів мало — додаємо загальні
+  // Дефолтні кадри для теми динозаврів і первісних людей
+  const dinoDefaults = [
+    `T-Rex roaring in dense jungle, small humans watching from distance, ${baseStyle}`,
+    `primitive humans running from stampede of triceratops, sunset, ${baseStyle}`,
+    `cave dwellers painting dinosaurs on cave walls by firelight, ${baseStyle}`,
+    `breathtaking landscape with pterodactyls flying over river valley, ${baseStyle}`,
+    `Velociraptor pack hunting, early humans hiding in tall grass, ${baseStyle}`,
+    `massive Brachiosaurus herd crossing a river at golden hour, ${baseStyle}`,
+  ];
+
   while (prompts.length < 4) {
-    prompts.push(`prehistoric scene, dinosaurs, ancient world, ${baseStyle}`);
+    prompts.push(dinoDefaults[prompts.length % dinoDefaults.length]);
   }
 
-  return prompts.slice(0, 8);
+  return prompts.slice(0, 6);
 }
 
 module.exports = { makeShortVideo };

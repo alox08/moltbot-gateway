@@ -47,7 +47,6 @@ async function archiveSave(userId, userMsg, botReply, tag = 'chat') {
   try {
     const text = `Користувач: ${userMsg}\nМолтБот: ${botReply}`;
     const vector = await getEmbedding(text);
-    console.log(`📚 Архіваріус: зберігаю [${tag}] вектор ${vector.length}d`);
     await qdrant.upsert(COLLECTION, {
       points: [{
         id: Date.now(),
@@ -55,7 +54,7 @@ async function archiveSave(userId, userMsg, botReply, tag = 'chat') {
         payload: { userId, userMsg, botReply, tag, ts: new Date().toISOString() },
       }],
     });
-    console.log(`📚 Архіваріус: збережено`);
+    console.log(`📚 Архіваріус: збережено [${tag}]`);
   } catch (e) {
     console.error('Архіваріус save помилка:', e.message);
   }
@@ -65,8 +64,7 @@ async function archiveSearch(query, limit = 3) {
   try {
     const vector = await getEmbedding(query);
     const results = await qdrant.search(COLLECTION, { vector, limit, with_payload: true, score_threshold: 0.3 });
-    console.log(`📚 Архіваріус: знайдено ${results.length} спогадів`);
-    return results.map(r => `[${r.payload.ts?.slice(0,10)}][${r.payload.tag}] ${r.payload.userMsg} → ${r.payload.botReply}`);
+    return results.map(r => `[${r.payload.ts?.slice(0, 10)}][${r.payload.tag}] ${r.payload.userMsg} → ${r.payload.botReply}`);
   } catch (e) {
     console.error('Архіваріус search помилка:', e.message);
     return [];
@@ -90,38 +88,47 @@ function addToHistory(channelId, role, content) {
 
 // ─── Системні промпти субагентів ───────────────────────────────────────────
 
-const SYSTEM_MAIN = `Ти МолтБот 🎬 — творчий AI-компаньйон Олександра для YouTube.
-Відповідай ТІЛЬКИ українською мовою. Без зайвих вступів типу "Звісно!" або "Чудове питання!".
-Будь конкретним і корисним.
-Спеціалізуєшся на YouTube Shorts (сценарії до 60с) і коротких оповіданнях (текст + озвучка + відео).
-Якщо в секції [ПАМ'ЯТЬ] є релевантний контекст — використовуй його у відповіді.`;
+const SYSTEM_MAIN = `Ти МолтБот 🎬 — головний оркестратор YouTube-конвеєра Олександра.
+Відповідай ТІЛЬКИ українською мовою. Без зайвих вступів.
+Ти делегуєш завдання субагентам і збираєш результат для користувача.
+
+Правила делегування — якщо запит стосується:
+- YouTube Shorts / сценарій / відео → відповідай: DELEGATE:SHORTS:[тема одним реченням]
+- Оповідання / story / читання → відповідай: DELEGATE:STORY:[тема одним реченням]
+- Будь-що інше → відповідай напряму.
+
+Якщо в секції [ПАМ'ЯТЬ] є релевантний контекст — використовуй його.`;
 
 const SYSTEM_SHORTS = `Ти ShortsManager 🎬 — субагент МолтБота для YouTube Shorts.
 Відповідай ТІЛЬКИ українською мовою.
-Твоє завдання: генерувати готові сценарії для YouTube Shorts (до 60 секунд).
+Генеруй готові сценарії для YouTube Shorts (до 60 секунд).
 
-Формат сценарію:
+Формат (обов'язково дотримуйся):
 🎬 ТЕМА: [назва]
 ⏱ ТРИВАЛІСТЬ: [секунди]
 🎯 АУДИТОРІЯ: [хто це дивиться]
 
 📝 СЦЕНАРІЙ:
-[0-3с] ХУК: [що показуємо/говоримо]
-[3-15с] ЗМІСТ: [основна частина]
-[15-25с] РОЗВИТОК: [деталі]
-[25-30с] ФІНАЛ + CTA: [заклик до дії]
+[0-3с] ХУК: [текст що говоримо]
+[3-15с] ЗМІСТ: [текст]
+[15-25с] РОЗВИТОК: [текст]
+[25-30с] ФІНАЛ + CTA: [текст]
 
 🎵 МУЗИКА/ЗВУК: [рекомендація]
-📸 КАДРИ: [що знімати]
+📸 КАДРИ:
+- [детальний опис кадру 1 англійською для AI-генерації]
+- [детальний опис кадру 2 англійською для AI-генерації]
+- [детальний опис кадру 3 англійською для AI-генерації]
+- [детальний опис кадру 4 англійською для AI-генерації]
 #️⃣ ХЕШТЕГИ: [5-7 штук]
 
 Якщо в секції [ПАМ'ЯТЬ] є схожі минулі сценарії — врахуй їх.`;
 
 const SYSTEM_STORY = `Ти StoryManager 📖 — субагент МолтБота для коротких оповідань.
 Відповідай ТІЛЬКИ українською мовою.
-Твоє завдання: генерувати короткі оповідання для YouTube (2-5 хвилин озвучки).
+Генеруй короткі оповідання для YouTube (2-5 хвилин озвучки).
 
-Формат оповідання:
+Формат:
 📖 НАЗВА: [назва]
 🎭 ЖАНР: [жанр]
 ⏱ ТРИВАЛІСТЬ ОЗВУЧКИ: [хвилини]
@@ -148,7 +155,7 @@ const MODELS = [
   'qwen/qwen2.5-vl-72b-instruct:free',
 ];
 
-async function callLLM(messages) {
+async function callLLM(messages, maxTokens = 2000) {
   for (const model of MODELS) {
     try {
       const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -159,16 +166,16 @@ async function callLLM(messages) {
           'HTTP-Referer': 'https://moltbot.railway.app',
           'X-Title': 'MoltBot',
         },
-        body: JSON.stringify({ model, messages, max_tokens: 2000 }),
+        body: JSON.stringify({ model, messages, max_tokens: maxTokens }),
       });
       const data = await res.json();
-      if (data.choices && data.choices[0] && data.choices[0].message?.content) {
+      if (data.choices?.[0]?.message?.content) {
         console.log(`✅ Модель: ${model}`);
         return data.choices[0].message.content.trim();
       }
-      console.warn(`⚠️ ${model} не відповів, перемикаю...`);
+      console.warn(`⚠️ ${model} не відповів`);
     } catch (e) {
-      console.warn(`⚠️ ${model} помилка: ${e.message}, перемикаю...`);
+      console.warn(`⚠️ ${model} помилка: ${e.message}`);
     }
   }
   return null;
@@ -176,6 +183,57 @@ async function callLLM(messages) {
 
 function cleanReply(text) {
   return text.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+}
+
+// ─── Субагенти ─────────────────────────────────────────────────────────────
+
+const AGENT_PROMPTS = {
+  main:   SYSTEM_MAIN,
+  shorts: SYSTEM_SHORTS,
+  story:  SYSTEM_STORY,
+};
+
+async function callAgent(agentType, task, memoryBlock = '') {
+  const systemPrompt = (AGENT_PROMPTS[agentType] || AGENT_PROMPTS.main) + memoryBlock;
+  console.log(`🤖 Субагент [${agentType}]: "${task.substring(0, 60)}"`);
+  const reply = await callLLM([
+    { role: 'system', content: systemPrompt },
+    { role: 'user', content: task },
+  ]);
+  return reply ? cleanReply(reply) : null;
+}
+
+// ─── Оркестратор ───────────────────────────────────────────────────────────
+
+async function orchestrate(channelId, userMessage, memoryBlock) {
+  addToHistory(channelId, 'user', userMessage);
+
+  // Оркестратор вирішує що робити
+  const msgs = [
+    { role: 'system', content: SYSTEM_MAIN + memoryBlock },
+    ...getHistory(channelId),
+  ];
+  const raw = await callLLM(msgs);
+  if (!raw) return null;
+
+  const response = cleanReply(raw);
+
+  // Перевіряємо чи оркестратор делегує субагенту
+  const delegateMatch = response.match(/DELEGATE:(SHORTS|STORY):(.+)/i);
+  if (delegateMatch) {
+    const agentType = delegateMatch[1].toLowerCase();
+    const agentTask = delegateMatch[2].trim();
+    console.log(`🎯 Оркестратор → [${agentType}]: "${agentTask}"`);
+
+    const memories = await archiveSearch(agentTask);
+    const agentMemory = memories.length > 0
+      ? `\n\n[ПАМ'ЯТЬ — схожі минулі роботи]:\n${memories.join('\n')}`
+      : '';
+
+    return await callAgent(agentType, agentTask, agentMemory);
+  }
+
+  return response;
 }
 
 // ─── Discord бот ───────────────────────────────────────────────────────────
@@ -191,7 +249,6 @@ const bot = new Client({
 const ALLOWED_CHANNEL = process.env.DISCORD_CHANNEL || 'основной';
 const OWNER_ID = '706908682767695962';
 
-// Реєстрація slash команд
 async function registerCommands() {
   const commands = [
     new SlashCommandBuilder()
@@ -204,14 +261,14 @@ async function registerCommands() {
       .addStringOption(o => o.setName('тема').setDescription('Тема оповідання').setRequired(true)),
     new SlashCommandBuilder()
       .setName('makevideo')
-      .setDescription('Генерує відео Short (зображення + озвучка + монтаж)')
+      .setDescription('Генерує відео Short: сценарій + AI-зображення + озвучка + монтаж')
       .addStringOption(o => o.setName('тема').setDescription('Тема відео').setRequired(true)),
   ].map(c => c.toJSON());
 
   const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
   try {
     await rest.put(Routes.applicationCommands(bot.user.id), { body: commands });
-    console.log('✅ Slash команди зареєстровано: /shorts, /story');
+    console.log('✅ Slash команди зареєстровано: /shorts /story /makevideo');
   } catch (e) {
     console.error('Помилка реєстрації команд:', e.message);
   }
@@ -235,57 +292,69 @@ bot.on('interactionCreate', async (interaction) => {
   }
 
   const tema = interaction.options.getString('тема');
+  const cmd = interaction.commandName;
   await interaction.deferReply();
 
-  const memories = await archiveSearch(tema);
-  const memoryBlock = memories.length > 0
-    ? `\n\n[ПАМ'ЯТЬ — схожі минулі роботи]:\n${memories.join('\n')}`
-    : '';
-
-  let systemPrompt, tag;
-  if (interaction.commandName === 'shorts') {
-    systemPrompt = SYSTEM_SHORTS + memoryBlock;
-    tag = 'shorts';
+  if (cmd === 'shorts') {
+    // ── ShortsManager субагент ──
     console.log(`🎬 /shorts: "${tema}"`);
-  } else {
-    systemPrompt = SYSTEM_STORY + memoryBlock;
-    tag = 'story';
+    const memories = await archiveSearch(tema);
+    const memoryBlock = memories.length > 0
+      ? `\n\n[ПАМ'ЯТЬ]:\n${memories.join('\n')}`
+      : '';
+
+    let reply = await callAgent('shorts', tema, memoryBlock);
+    if (!reply) { await interaction.editReply('⚠️ Всі моделі недоступні. Спробуй пізніше.'); return; }
+    if (reply.length > 1990) reply = reply.substring(0, 1990) + '...';
+    await interaction.editReply(reply);
+    archiveSave(interaction.user.id, tema, reply, 'shorts');
+
+  } else if (cmd === 'story') {
+    // ── StoryManager субагент ──
     console.log(`📖 /story: "${tema}"`);
-  }
+    const memories = await archiveSearch(tema);
+    const memoryBlock = memories.length > 0
+      ? `\n\n[ПАМ'ЯТЬ]:\n${memories.join('\n')}`
+      : '';
 
-  const messages = [
-    { role: 'system', content: systemPrompt },
-    { role: 'user', content: tema },
-  ];
+    let reply = await callAgent('story', tema, memoryBlock);
+    if (!reply) { await interaction.editReply('⚠️ Всі моделі недоступні. Спробуй пізніше.'); return; }
+    if (reply.length > 1990) reply = reply.substring(0, 1990) + '...';
+    await interaction.editReply(reply);
+    archiveSave(interaction.user.id, tema, reply, 'story');
 
-  let reply = await callLLM(messages);
-  if (!reply) {
-    await interaction.editReply('⚠️ Всі моделі недоступні. Спробуй пізніше.');
-    return;
-  }
+  } else if (cmd === 'makevideo') {
+    // ── VideoMaker: ShortsManager → FLUX → edge-tts → FFmpeg ──
+    console.log(`🎬 /makevideo: "${tema}"`);
+    const memories = await archiveSearch(tema);
+    const memoryBlock = memories.length > 0
+      ? `\n\n[ПАМ'ЯТЬ]:\n${memories.join('\n')}`
+      : '';
 
-  reply = cleanReply(reply);
-  if (reply.length > 1990) reply = reply.substring(0, 1990) + '...';
+    // Крок 1: ShortsManager генерує сценарій
+    await interaction.editReply('📝 Крок 1/3: ShortsManager генерує сценарій...');
+    const script = await callAgent('shorts', `Динозаври і первісні люди: ${tema}`, memoryBlock);
+    if (!script) { await interaction.editReply('⚠️ Не вдалось згенерувати сценарій.'); return; }
 
-  await interaction.editReply(reply);
-  archiveSave(interaction.user.id, tema, reply, tag);
+    // Показуємо сценарій (обрізаємо якщо надто довгий)
+    const preview = script.length > 1400 ? script.substring(0, 1400) + '...' : script;
+    await interaction.editReply(`📝 Сценарій готовий:\n\n${preview}\n\n🎨 Крок 2/3: Генерую AI-зображення та озвучку паралельно...`);
 
-  // /makevideo — генерація відео
-  if (interaction.commandName === 'makevideo') {
-    await interaction.followUp('🎬 Генерую відео... це займе 2-3 хвилини');
+    // Крок 2+3: VideoMaker (FLUX зображення + edge-tts + FFmpeg)
     try {
-      const videoFile = await makeShortVideo(reply);
+      const videoFile = await makeShortVideo(script);
       const attachment = new AttachmentBuilder(videoFile, { name: 'short.mp4' });
-      await interaction.followUp({ content: '✅ Відео готове!', files: [attachment] });
+      await interaction.followUp({ content: '✅ Крок 3/3: Відео змонтоване! 🎬', files: [attachment] });
       fs.unlinkSync(videoFile);
     } catch (e) {
       console.error('makevideo помилка:', e.message);
-      await interaction.followUp(`⚠️ Помилка генерації відео: ${e.message}`);
+      await interaction.followUp(`⚠️ Відео не вдалось: ${e.message}`);
     }
+    archiveSave(interaction.user.id, tema, script, 'makevideo');
   }
 });
 
-// ─── Звичайні повідомлення ─────────────────────────────────────────────────
+// ─── Звичайні повідомлення (через оркестратор) ─────────────────────────────
 
 bot.on('messageCreate', async (message) => {
   if (message.author.bot) return;
@@ -304,22 +373,10 @@ bot.on('messageCreate', async (message) => {
     : '';
 
   const channelId = message.channel.id;
-  addToHistory(channelId, 'user', userMessage);
+  let reply = await orchestrate(channelId, userMessage, memoryBlock);
 
-  const msgs = [
-    { role: 'system', content: SYSTEM_MAIN + memoryBlock },
-    ...getHistory(channelId),
-  ];
-
-  let reply = await callLLM(msgs);
   if (!reply) {
     await message.reply('⚠️ Всі моделі недоступні. Спробуй пізніше.');
-    return;
-  }
-
-  reply = cleanReply(reply);
-  if (!reply) {
-    await message.reply('🤔 МолтБот думає... Спробуй ще раз.');
     return;
   }
   if (reply.length > 1990) reply = reply.substring(0, 1990) + '...';
