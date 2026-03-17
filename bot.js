@@ -162,7 +162,7 @@ async function callLLM(messages) {
         body: JSON.stringify({ model, messages, max_tokens: 2000 }),
       });
       const data = await res.json();
-      if (data.choices && data.choices[0]) {
+      if (data.choices && data.choices[0] && data.choices[0].message?.content) {
         console.log(`✅ Модель: ${model}`);
         return data.choices[0].message.content.trim();
       }
