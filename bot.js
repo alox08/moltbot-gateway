@@ -41,7 +41,7 @@ client.on('messageCreate', async (message) => {
         'X-Title': 'MoltBot',
       },
       body: JSON.stringify({
-        model: 'deepseek/deepseek-r1:free',
+        model: 'meta-llama/llama-3.3-70b-instruct:free',
         messages: [
           { role: 'system', content: SYSTEM_PROMPT },
           { role: 'user', content: userMessage }
