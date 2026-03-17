@@ -14,15 +14,15 @@ const qdrant = new QdrantClient({
 async function initCollection() {
   try {
     const collections = await qdrant.getCollections();
-    const existing = collections.collections.find(c => c.name === COLLECTION);
-    if (existing) {
-      await qdrant.deleteCollection(COLLECTION);
-      console.log(`📚 Архіваріус: стару колекцію видалено`);
+    const exists = collections.collections.some(c => c.name === COLLECTION);
+    if (!exists) {
+      await qdrant.createCollection(COLLECTION, {
+        vectors: { size: VECTOR_SIZE, distance: 'Cosine' },
+      });
+      console.log(`📚 Архіваріус: колекцію "${COLLECTION}" створено (${VECTOR_SIZE}d)`);
+    } else {
+      console.log(`📚 Архіваріус: колекція "${COLLECTION}" готова`);
     }
-    await qdrant.createCollection(COLLECTION, {
-      vectors: { size: VECTOR_SIZE, distance: 'Cosine' },
-    });
-    console.log(`📚 Архіваріус: колекцію "${COLLECTION}" створено (${VECTOR_SIZE}d)`);
   } catch (e) {
     console.error('Архіваріус initCollection помилка:', e.message);
   }
@@ -45,6 +45,7 @@ async function archiveSave(userId, userMsg, botReply) {
   try {
     const text = `Користувач: ${userMsg}\nМолтБот: ${botReply}`;
     const vector = await getEmbedding(text);
+    console.log(`📚 Архіваріус: зберігаю вектор розміром ${vector.length}`);
     await qdrant.upsert(COLLECTION, {
       points: [{
         id: Date.now(),
@@ -52,6 +53,7 @@ async function archiveSave(userId, userMsg, botReply) {
         payload: { userId, userMsg, botReply, ts: new Date().toISOString() },
       }],
     });
+    console.log(`📚 Архіваріус: збережено`);
   } catch (e) {
     console.error('Архіваріус save помилка:', e.message);
   }
@@ -60,7 +62,8 @@ async function archiveSave(userId, userMsg, botReply) {
 async function archiveSearch(query, limit = 3) {
   try {
     const vector = await getEmbedding(query);
-    const results = await qdrant.search(COLLECTION, { vector, limit, with_payload: true });
+    const results = await qdrant.search(COLLECTION, { vector, limit, with_payload: true, score_threshold: 0.3 });
+    console.log(`📚 Архіваріус: знайдено ${results.length} спогадів`);
     return results.map(r => `[${r.payload.ts?.slice(0,10)}] ${r.payload.userMsg} → ${r.payload.botReply}`);
   } catch (e) {
     console.error('Архіваріус search помилка:', e.message);
