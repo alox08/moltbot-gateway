@@ -5,30 +5,42 @@ const http = require('http');
 
 // ─── Завантажити файл за URL ────────────────────────────────────────────────
 
-function downloadFile(url, dest) {
+function downloadFile(url, dest, timeoutMs = 25000) {
   return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('Timeout 25s')), timeoutMs);
+
     const request = (reqUrl) => {
       const lib = reqUrl.startsWith('https') ? https : http;
-      lib.get(reqUrl, { timeout: 60000 }, res => {
-        // Обробка редиректів
+      lib.get(reqUrl, res => {
         if (res.statusCode === 301 || res.statusCode === 302 || res.statusCode === 307) {
           return request(res.headers.location);
         }
         if (res.statusCode !== 200) {
+          clearTimeout(timer);
           reject(new Error(`HTTP ${res.statusCode}`));
           return;
         }
         const file = fs.createWriteStream(dest);
         res.pipe(file);
-        file.on('finish', () => file.close(resolve));
-        file.on('error', err => { fs.unlink(dest, () => {}); reject(err); });
+        file.on('finish', () => { clearTimeout(timer); file.close(resolve); });
+        file.on('error', err => { clearTimeout(timer); fs.unlink(dest, () => {}); reject(err); });
       }).on('error', err => {
+        clearTimeout(timer);
         fs.unlink(dest, () => {});
         reject(err);
       });
     };
     request(url);
   });
+}
+
+function createFallbackImage(index, dest) {
+  // Створюємо кольоровий фон через FFmpeg як запасний варіант
+  const colors = ['#0d1b2a', '#1b2838', '#162032', '#0a1628'];
+  const color = colors[index % colors.length];
+  const hex = color.replace('#', '0x');
+  execSync(`ffmpeg -y -f lavfi -i "color=c=${hex}:size=576x1024" -frames:v 1 "${dest}" 2>/dev/null`);
+  console.log(`🎨 Fallback: кольоровий фон для зображення ${index}`);
 }
 
 // ─── Генерація зображень через Replicate (FLUX Schnell) ────────────────────
@@ -41,19 +53,22 @@ async function generateImages(prompts) {
   console.log(`🎨 Генерую ${limited.length} зображень через Pollinations.ai...`);
 
   for (let i = 0; i < limited.length; i++) {
+    const dest = `/tmp/img_${i}.jpg`;
     try {
-      // Обрізаємо промпт до 150 символів щоб URL не був занадто довгим
-      const shortPrompt = limited[i].substring(0, 150);
+      const shortPrompt = limited[i].substring(0, 120);
       const encoded = encodeURIComponent(shortPrompt);
       const url = `https://image.pollinations.ai/prompt/${encoded}?width=576&height=1024&nologo=true&seed=${i + 1}`;
-      const dest = `/tmp/img_${i}.jpg`;
       console.log(`🎨 Завантажую зображення ${i + 1}/${limited.length}...`);
       await downloadFile(url, dest);
-      imageFiles.push(dest);
       console.log(`🎨 Зображення ${i + 1}/${limited.length} готове`);
     } catch (e) {
-      console.error(`🎨 Помилка зображення ${i}:`, e.message);
+      console.warn(`🎨 Pollinations не відповів (${e.message}), використовую fallback...`);
+      try { createFallbackImage(i, dest); } catch (fe) {
+        console.error(`🎨 Fallback теж не вдався:`, fe.message);
+        continue;
+      }
     }
+    imageFiles.push(dest);
   }
   return imageFiles;
 }
