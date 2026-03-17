@@ -1,10 +1,7 @@
-const Replicate = require('replicate');
 const { execSync, exec } = require('child_process');
 const fs = require('fs');
 const https = require('https');
 const http = require('http');
-
-const replicate = new Replicate({ auth: process.env.REPLICATE_API_KEY });
 
 // ─── Завантажити файл за URL ────────────────────────────────────────────────
 
@@ -28,49 +25,24 @@ function downloadFile(url, dest) {
 
 // ─── Генерація зображень через Replicate (FLUX Schnell) ────────────────────
 
-async function generateOneImage(prompt, index, retries = 3) {
-  for (let attempt = 0; attempt < retries; attempt++) {
-    try {
-      const output = await replicate.run(
-        'black-forest-labs/flux-schnell',
-        { input: { prompt, num_outputs: 1, aspect_ratio: '9:16' } }
-      );
-      const raw = Array.isArray(output) ? output[0] : output;
-      const url = (raw && typeof raw === 'object' && typeof raw.url === 'function')
-        ? raw.url()
-        : String(raw);
-      const dest = `/tmp/img_${index}.jpg`;
-      await downloadFile(url, dest);
-      return dest;
-    } catch (e) {
-      const is429 = e.message && e.message.includes('429');
-      const waitSec = is429 ? 15 : 5;
-      console.warn(`🎨 Спроба ${attempt + 1} зображення ${index} невдала: ${e.message.substring(0, 80)}`);
-      if (attempt < retries - 1) {
-        console.log(`⏳ Чекаю ${waitSec}с перед повтором...`);
-        await new Promise(r => setTimeout(r, waitSec * 1000));
-      }
-    }
-  }
-  return null;
-}
+// ─── Генерація зображень через Pollinations.ai (безкоштовно, без API ключа) ─
 
 async function generateImages(prompts) {
   const imageFiles = [];
-  // Обмежуємо до 3 зображень щоб не перевищувати rate limit
-  const limited = prompts.slice(0, 3);
-  console.log(`🎨 Генерую ${limited.length} зображень (послідовно через rate limit)...`);
+  const limited = prompts.slice(0, 4);
+  console.log(`🎨 Генерую ${limited.length} зображень через Pollinations.ai...`);
 
   for (let i = 0; i < limited.length; i++) {
-    const dest = await generateOneImage(limited[i], i);
-    if (dest) {
+    try {
+      const encoded = encodeURIComponent(limited[i]);
+      const url = `https://image.pollinations.ai/prompt/${encoded}?width=576&height=1024&nologo=true&seed=${Date.now() + i}`;
+      const dest = `/tmp/img_${i}.jpg`;
+      console.log(`🎨 Завантажую зображення ${i + 1}/${limited.length}...`);
+      await downloadFile(url, dest);
       imageFiles.push(dest);
       console.log(`🎨 Зображення ${i + 1}/${limited.length} готове`);
-    }
-    // Пауза між запитами щоб не словити 429
-    if (i < limited.length - 1) {
-      console.log('⏳ Пауза 12с між зображеннями...');
-      await new Promise(r => setTimeout(r, 12000));
+    } catch (e) {
+      console.error(`🎨 Помилка зображення ${i}:`, e.message);
     }
   }
   return imageFiles;
