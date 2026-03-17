@@ -185,6 +185,7 @@ const bot = new Client({
 });
 
 const ALLOWED_CHANNEL = process.env.DISCORD_CHANNEL || 'основной';
+const OWNER_ID = '706908682767695962';
 
 // Реєстрація slash команд
 async function registerCommands() {
@@ -223,6 +224,11 @@ bot.on('ready', async () => {
 
 bot.on('interactionCreate', async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
+
+  if (interaction.user.id !== OWNER_ID) {
+    await interaction.reply({ content: '⛔ Тільки для власника бота.', ephemeral: true });
+    return;
+  }
 
   const tema = interaction.options.getString('тема');
   await interaction.deferReply();
@@ -280,6 +286,7 @@ bot.on('interactionCreate', async (interaction) => {
 bot.on('messageCreate', async (message) => {
   if (message.author.bot) return;
   if (message.channel.name !== ALLOWED_CHANNEL) return;
+  if (message.author.id !== OWNER_ID) return;
 
   const userMessage = message.content.trim();
   if (!userMessage) return;
