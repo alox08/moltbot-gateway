@@ -8,7 +8,9 @@
   },
   "dependencies": {
     "discord.js": "^14.16.0",
-    "@qdrant/js-client-rest": "^1.9.0"
+    "@qdrant/js-client-rest": "^1.9.0",
+    "replicate": "^1.0.1",
+    "edge-tts": "^1.0.3"
   },
   "engines": {
     "node": ">=22"

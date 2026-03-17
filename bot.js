@@ -1,5 +1,7 @@
-const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder } = require('discord.js');
+const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, AttachmentBuilder } = require('discord.js');
 const { QdrantClient } = require('@qdrant/js-client-rest');
+const { makeShortVideo } = require('./videomaker');
+const fs = require('fs');
 
 // ─── Архіваріус ────────────────────────────────────────────────────────────
 
@@ -195,6 +197,10 @@ async function registerCommands() {
       .setName('story')
       .setDescription('Генерує коротке оповідання для YouTube')
       .addStringOption(o => o.setName('тема').setDescription('Тема оповідання').setRequired(true)),
+    new SlashCommandBuilder()
+      .setName('makevideo')
+      .setDescription('Генерує відео Short (зображення + озвучка + монтаж)')
+      .addStringOption(o => o.setName('тема').setDescription('Тема відео').setRequired(true)),
   ].map(c => c.toJSON());
 
   const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
@@ -253,6 +259,20 @@ bot.on('interactionCreate', async (interaction) => {
 
   await interaction.editReply(reply);
   archiveSave(interaction.user.id, tema, reply, tag);
+
+  // /makevideo — генерація відео
+  if (interaction.commandName === 'makevideo') {
+    await interaction.followUp('🎬 Генерую відео... це займе 2-3 хвилини');
+    try {
+      const videoFile = await makeShortVideo(reply);
+      const attachment = new AttachmentBuilder(videoFile, { name: 'short.mp4' });
+      await interaction.followUp({ content: '✅ Відео готове!', files: [attachment] });
+      fs.unlinkSync(videoFile);
+    } catch (e) {
+      console.error('makevideo помилка:', e.message);
+      await interaction.followUp(`⚠️ Помилка генерації відео: ${e.message}`);
+    }
+  }
 });
 
 // ─── Звичайні повідомлення ─────────────────────────────────────────────────
