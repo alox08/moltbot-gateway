@@ -1,10 +1,10 @@
-const { Client, GatewayIntentBits } = require('discord.js');
+const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder } = require('discord.js');
 const { QdrantClient } = require('@qdrant/js-client-rest');
 
 // ─── Архіваріус ────────────────────────────────────────────────────────────
 
 const COLLECTION = 'moltbot_memory';
-const VECTOR_SIZE = 1024; // розмір векторів Jina v3
+const VECTOR_SIZE = 1024;
 
 const qdrant = new QdrantClient({
   url: process.env.QDRANT_URL,
@@ -19,7 +19,7 @@ async function initCollection() {
       await qdrant.createCollection(COLLECTION, {
         vectors: { size: VECTOR_SIZE, distance: 'Cosine' },
       });
-      console.log(`📚 Архіваріус: колекцію "${COLLECTION}" створено (${VECTOR_SIZE}d)`);
+      console.log(`📚 Архіваріус: колекцію "${COLLECTION}" створено`);
     } else {
       console.log(`📚 Архіваріус: колекція "${COLLECTION}" готова`);
     }
@@ -41,16 +41,16 @@ async function getEmbedding(text) {
   return data.data[0].embedding;
 }
 
-async function archiveSave(userId, userMsg, botReply) {
+async function archiveSave(userId, userMsg, botReply, tag = 'chat') {
   try {
     const text = `Користувач: ${userMsg}\nМолтБот: ${botReply}`;
     const vector = await getEmbedding(text);
-    console.log(`📚 Архіваріус: зберігаю вектор розміром ${vector.length}`);
+    console.log(`📚 Архіваріус: зберігаю [${tag}] вектор ${vector.length}d`);
     await qdrant.upsert(COLLECTION, {
       points: [{
         id: Date.now(),
         vector,
-        payload: { userId, userMsg, botReply, ts: new Date().toISOString() },
+        payload: { userId, userMsg, botReply, tag, ts: new Date().toISOString() },
       }],
     });
     console.log(`📚 Архіваріус: збережено`);
@@ -64,14 +64,14 @@ async function archiveSearch(query, limit = 3) {
     const vector = await getEmbedding(query);
     const results = await qdrant.search(COLLECTION, { vector, limit, with_payload: true, score_threshold: 0.3 });
     console.log(`📚 Архіваріус: знайдено ${results.length} спогадів`);
-    return results.map(r => `[${r.payload.ts?.slice(0,10)}] ${r.payload.userMsg} → ${r.payload.botReply}`);
+    return results.map(r => `[${r.payload.ts?.slice(0,10)}][${r.payload.tag}] ${r.payload.userMsg} → ${r.payload.botReply}`);
   } catch (e) {
     console.error('Архіваріус search помилка:', e.message);
     return [];
   }
 }
 
-// ─── Пам'ять розмови (in-memory, останні 10 повідомлень на канал) ──────────
+// ─── Пам'ять розмови (in-memory, останні 10 повідомлень) ───────────────────
 
 const conversationHistory = new Map();
 
@@ -86,25 +86,55 @@ function addToHistory(channelId, role, content) {
   if (history.length > 10) history.splice(0, history.length - 10);
 }
 
-// ─── Discord бот ───────────────────────────────────────────────────────────
+// ─── Системні промпти субагентів ───────────────────────────────────────────
 
-const { Client: DiscordClient, GatewayIntentBits: Intents } = require('discord.js');
-
-const bot = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent,
-  ]
-});
-
-const ALLOWED_CHANNEL = process.env.DISCORD_CHANNEL || 'основной';
-
-const SYSTEM_PROMPT = `Ти МолтБот 🎬 — творчий AI-компаньйон Олександра для YouTube.
+const SYSTEM_MAIN = `Ти МолтБот 🎬 — творчий AI-компаньйон Олександра для YouTube.
 Відповідай ТІЛЬКИ українською мовою. Без зайвих вступів типу "Звісно!" або "Чудове питання!".
 Будь конкретним і корисним.
 Спеціалізуєшся на YouTube Shorts (сценарії до 60с) і коротких оповіданнях (текст + озвучка + відео).
 Якщо в секції [ПАМ'ЯТЬ] є релевантний контекст — використовуй його у відповіді.`;
+
+const SYSTEM_SHORTS = `Ти ShortsManager 🎬 — субагент МолтБота для YouTube Shorts.
+Відповідай ТІЛЬКИ українською мовою.
+Твоє завдання: генерувати готові сценарії для YouTube Shorts (до 60 секунд).
+
+Формат сценарію:
+🎬 ТЕМА: [назва]
+⏱ ТРИВАЛІСТЬ: [секунди]
+🎯 АУДИТОРІЯ: [хто це дивиться]
+
+📝 СЦЕНАРІЙ:
+[0-3с] ХУК: [що показуємо/говоримо]
+[3-15с] ЗМІСТ: [основна частина]
+[15-25с] РОЗВИТОК: [деталі]
+[25-30с] ФІНАЛ + CTA: [заклик до дії]
+
+🎵 МУЗИКА/ЗВУК: [рекомендація]
+📸 КАДРИ: [що знімати]
+#️⃣ ХЕШТЕГИ: [5-7 штук]
+
+Якщо в секції [ПАМ'ЯТЬ] є схожі минулі сценарії — врахуй їх.`;
+
+const SYSTEM_STORY = `Ти StoryManager 📖 — субагент МолтБота для коротких оповідань.
+Відповідай ТІЛЬКИ українською мовою.
+Твоє завдання: генерувати короткі оповідання для YouTube (2-5 хвилин озвучки).
+
+Формат оповідання:
+📖 НАЗВА: [назва]
+🎭 ЖАНР: [жанр]
+⏱ ТРИВАЛІСТЬ ОЗВУЧКИ: [хвилини]
+🎯 АУДИТОРІЯ: [хто це слухає]
+
+📝 ТЕКСТ ОПОВІДАННЯ:
+[Повний текст, розбитий на абзаци]
+
+🎵 МУЗИЧНИЙ СУПРОВІД: [рекомендація по настрою]
+🖼 ЗОБРАЖЕННЯ/ВІДЕО: [що показувати під час озвучки]
+🎙 ПОРАДИ ДЛЯ ОЗВУЧКИ: [темп, інтонація]
+
+Якщо в секції [ПАМ'ЯТЬ] є схожі минулі оповідання — врахуй стиль.`;
+
+// ─── LLM виклик з автоперемиканням ────────────────────────────────────────
 
 const MODELS = [
   'nvidia/nemotron-3-super-120b-a12b:free',
@@ -123,7 +153,7 @@ async function callLLM(messages) {
           'HTTP-Referer': 'https://moltbot.railway.app',
           'X-Title': 'MoltBot',
         },
-        body: JSON.stringify({ model, messages, max_tokens: 1500 }),
+        body: JSON.stringify({ model, messages, max_tokens: 2000 }),
       });
       const data = await res.json();
       if (data.choices && data.choices[0]) {
@@ -138,11 +168,94 @@ async function callLLM(messages) {
   return null;
 }
 
+function cleanReply(text) {
+  return text.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+}
+
+// ─── Discord бот ───────────────────────────────────────────────────────────
+
+const bot = new Client({
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent,
+  ]
+});
+
+const ALLOWED_CHANNEL = process.env.DISCORD_CHANNEL || 'основной';
+
+// Реєстрація slash команд
+async function registerCommands() {
+  const commands = [
+    new SlashCommandBuilder()
+      .setName('shorts')
+      .setDescription('Генерує сценарій для YouTube Short')
+      .addStringOption(o => o.setName('тема').setDescription('Тема відео').setRequired(true)),
+    new SlashCommandBuilder()
+      .setName('story')
+      .setDescription('Генерує коротке оповідання для YouTube')
+      .addStringOption(o => o.setName('тема').setDescription('Тема оповідання').setRequired(true)),
+  ].map(c => c.toJSON());
+
+  const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
+  try {
+    await rest.put(Routes.applicationCommands(bot.user.id), { body: commands });
+    console.log('✅ Slash команди зареєстровано: /shorts, /story');
+  } catch (e) {
+    console.error('Помилка реєстрації команд:', e.message);
+  }
+}
+
 bot.on('ready', async () => {
   console.log(`✅ МолтБот запущений як ${bot.user.tag}`);
   console.log(`📺 Слухаю канал: #${ALLOWED_CHANNEL}`);
   await initCollection();
+  await registerCommands();
 });
+
+// ─── Slash команди ─────────────────────────────────────────────────────────
+
+bot.on('interactionCreate', async (interaction) => {
+  if (!interaction.isChatInputCommand()) return;
+
+  const tema = interaction.options.getString('тема');
+  await interaction.deferReply();
+
+  const memories = await archiveSearch(tema);
+  const memoryBlock = memories.length > 0
+    ? `\n\n[ПАМ'ЯТЬ — схожі минулі роботи]:\n${memories.join('\n')}`
+    : '';
+
+  let systemPrompt, tag;
+  if (interaction.commandName === 'shorts') {
+    systemPrompt = SYSTEM_SHORTS + memoryBlock;
+    tag = 'shorts';
+    console.log(`🎬 /shorts: "${tema}"`);
+  } else {
+    systemPrompt = SYSTEM_STORY + memoryBlock;
+    tag = 'story';
+    console.log(`📖 /story: "${tema}"`);
+  }
+
+  const messages = [
+    { role: 'system', content: systemPrompt },
+    { role: 'user', content: tema },
+  ];
+
+  let reply = await callLLM(messages);
+  if (!reply) {
+    await interaction.editReply('⚠️ Всі моделі недоступні. Спробуй пізніше.');
+    return;
+  }
+
+  reply = cleanReply(reply);
+  if (reply.length > 1990) reply = reply.substring(0, 1990) + '...';
+
+  await interaction.editReply(reply);
+  archiveSave(interaction.user.id, tema, reply, tag);
+});
+
+// ─── Звичайні повідомлення ─────────────────────────────────────────────────
 
 bot.on('messageCreate', async (message) => {
   if (message.author.bot) return;
@@ -154,46 +267,37 @@ bot.on('messageCreate', async (message) => {
   console.log(`💬 [${message.author.username}]: ${userMessage}`);
   await message.channel.sendTyping();
 
-  // 1. Шукаємо в пам'яті Архіваріуса
   const memories = await archiveSearch(userMessage);
   const memoryBlock = memories.length > 0
     ? `\n\n[ПАМ'ЯТЬ — схожі минулі розмови]:\n${memories.join('\n')}`
     : '';
 
-  // 2. Будуємо повідомлення: system + пам'ять + історія + нове
   const channelId = message.channel.id;
   addToHistory(channelId, 'user', userMessage);
 
-  const messages = [
-    { role: 'system', content: SYSTEM_PROMPT + memoryBlock },
+  const msgs = [
+    { role: 'system', content: SYSTEM_MAIN + memoryBlock },
     ...getHistory(channelId),
   ];
 
-  // 3. Викликаємо LLM з автоперемиканням моделей
-  let reply = await callLLM(messages);
-
+  let reply = await callLLM(msgs);
   if (!reply) {
     await message.reply('⚠️ Всі моделі недоступні. Спробуй пізніше.');
     return;
   }
 
-  // Видаляємо <think> блоки
-  reply = reply.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
-
+  reply = cleanReply(reply);
   if (!reply) {
     await message.reply('🤔 МолтБот думає... Спробуй ще раз.');
     return;
   }
-
-  // Discord ліміт 2000 символів
   if (reply.length > 1990) reply = reply.substring(0, 1990) + '...';
 
   await message.reply(reply);
   console.log(`✅ Відповів: ${reply.substring(0, 80)}...`);
 
-  // 4. Зберігаємо в пам'ять Архіваріуса і в локальну історію
   addToHistory(channelId, 'assistant', reply);
-  archiveSave(message.author.id, userMessage, reply);
+  archiveSave(message.author.id, userMessage, reply, 'chat');
 });
 
 bot.login(process.env.DISCORD_TOKEN);
