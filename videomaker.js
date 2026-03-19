@@ -1,221 +1,192 @@
 const { execSync, exec } = require('child_process');
 const fs = require('fs');
 const https = require('https');
+const http = require('http');
 
-// ─── Генерація зображень через Stability AI ────────────────────────────────
+// ─── Завантажити файл за URL ───────────────────────────────────────────────
 
-async function generateImageStability(prompt, dest) {
-  const apiKey = process.env.STABILITY_API_KEY;
-  const shortPrompt = prompt.substring(0, 200);
-
+function downloadFile(url, dest, timeoutMs = 60000) {
   return new Promise((resolve, reject) => {
-    const body = JSON.stringify({
-      text_prompts: [
-        { text: shortPrompt, weight: 1 },
-        { text: 'blurry, low quality, text, watermark', weight: -1 },
-      ],
-      cfg_scale: 7,
-      height: 1344,
-      width: 768,
-      samples: 1,
-      steps: 30,
-    });
-
-    const options = {
-      hostname: 'api.stability.ai',
-      path: '/v1/generation/stable-diffusion-xl-1024-v1-0/text-to-image',
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-      },
+    const timer = setTimeout(() => reject(new Error('Timeout 60s')), timeoutMs);
+    const request = (reqUrl) => {
+      const lib = reqUrl.startsWith('https') ? https : http;
+      lib.get(reqUrl, res => {
+        if ([301, 302, 307].includes(res.statusCode)) return request(res.headers.location);
+        if (res.statusCode !== 200) { clearTimeout(timer); reject(new Error(`HTTP ${res.statusCode}`)); return; }
+        const file = fs.createWriteStream(dest);
+        res.pipe(file);
+        file.on('finish', () => { clearTimeout(timer); file.close(resolve); });
+        file.on('error', err => { clearTimeout(timer); fs.unlink(dest, () => {}); reject(err); });
+      }).on('error', err => { clearTimeout(timer); reject(err); });
     };
+    request(url);
+  });
+}
 
-    const req = https.request(options, res => {
+// ─── Pexels: пошук і завантаження відео ───────────────────────────────────
+
+async function searchPexelsVideos(query, count = 4) {
+  return new Promise((resolve, reject) => {
+    const encoded = encodeURIComponent(query);
+    const options = {
+      hostname: 'api.pexels.com',
+      path: `/videos/search?query=${encoded}&per_page=${count}&size=medium`,
+      headers: { 'Authorization': process.env.PEXELS_API_KEY },
+    };
+    https.get(options, res => {
       let data = '';
       res.on('data', chunk => { data += chunk; });
       res.on('end', () => {
         try {
           const json = JSON.parse(data);
-          if (json.artifacts && json.artifacts[0]) {
-            const imgBuffer = Buffer.from(json.artifacts[0].base64, 'base64');
-            fs.writeFileSync(dest, imgBuffer);
-            resolve();
-          } else {
-            reject(new Error(json.message || JSON.stringify(json).substring(0, 100)));
-          }
-        } catch (e) {
-          reject(new Error(`Parse error: ${e.message}`));
-        }
+          resolve(json.videos || []);
+        } catch (e) { reject(e); }
       });
-    });
-
-    req.on('error', reject);
-    req.setTimeout(60000, () => { req.destroy(); reject(new Error('Timeout 60s')); });
-    req.write(body);
-    req.end();
+    }).on('error', reject);
   });
 }
 
-async function generateImages(prompts) {
-  const imageFiles = [];
-  const limited = prompts.slice(0, 4);
-  console.log(`🎨 Генерую ${limited.length} зображень через Stability AI...`);
+function getBestVideoUrl(video) {
+  const files = (video.video_files || [])
+    .filter(f => f.width && f.height)
+    .sort((a, b) => b.height - a.height);
+  const hd = files.find(f => f.quality === 'hd' && f.height <= 1920) || files[0];
+  return hd ? hd.link : null;
+}
 
-  for (let i = 0; i < limited.length; i++) {
-    const dest = `/tmp/img_${i}.png`;
-    try {
-      console.log(`🎨 Зображення ${i + 1}/${limited.length}...`);
-      await generateImageStability(limited[i], dest);
-      console.log(`🎨 Зображення ${i + 1} готове`);
-      imageFiles.push(dest);
-    } catch (e) {
-      console.warn(`⚠️ Stability AI помилка (${e.message.substring(0, 60)}), fallback...`);
+async function downloadPexelsClips(keywords, count = 4) {
+  const clips = [];
+  console.log(`🎬 Шукаю відео на Pexels: "${keywords}"...`);
+
+  try {
+    const videos = await searchPexelsVideos(keywords, count * 2); // беремо більше про запас
+    console.log(`🎬 Знайдено ${videos.length} відео`);
+
+    for (let i = 0; i < Math.min(videos.length, count); i++) {
+      const url = getBestVideoUrl(videos[i]);
+      if (!url) continue;
+      const dest = `/tmp/pexels_${i}.mp4`;
       try {
-        const fallback = createFallbackImage(i, dest);
-        imageFiles.push(fallback);
-      } catch {}
+        console.log(`⬇️ Завантажую кліп ${i + 1}...`);
+        await downloadFile(url, dest);
+        clips.push(dest);
+        console.log(`✅ Кліп ${i + 1} завантажено`);
+      } catch (e) {
+        console.warn(`⚠️ Кліп ${i + 1} не завантажився: ${e.message}`);
+      }
+    }
+  } catch (e) {
+    console.error('Pexels помилка:', e.message);
+  }
+
+  return clips;
+}
+
+// ─── Обробка кліпу: обрізати до потрібної тривалості + кроп 9:16 + текст ──
+
+function processClip(inputFile, outputFile, duration, text, index) {
+  const textFile = `/tmp/clip_text_${index}.txt`;
+
+  // Перенос рядків кожні ~20 символів
+  const words = text.split(' ');
+  const lines = [];
+  let line = '';
+  for (const w of words) {
+    if ((line + ' ' + w).trim().length > 20) {
+      if (line) lines.push(line.trim());
+      line = w;
+    } else {
+      line = (line + ' ' + w).trim();
     }
   }
-  return imageFiles;
-}
+  if (line) lines.push(line.trim());
+  fs.writeFileSync(textFile, lines.slice(0, 4).join('\n'));
 
-// ─── Fallback: кольоровий фон ──────────────────────────────────────────────
-
-function createFallbackImage(index, dest) {
-  const colors = ['0x0d1b2a', '0x1b0a2a', '0x0a2818', '0x2a1808'];
-  const color = colors[index % colors.length];
-  const pngDest = dest.replace('.jpg', '.png');
-  execSync(`ffmpeg -y -loglevel error -f lavfi -i "color=c=${color}:size=576x1024" -frames:v 1 "${pngDest}"`, { stdio: 'pipe' });
-  console.log(`🎨 Fallback фон для зображення ${index + 1}`);
-  return pngDest;
-}
-
-// ─── Озвучка через edge-tts ────────────────────────────────────────────────
-
-async function generateVoice(text, outputFile) {
-  return new Promise((resolve, reject) => {
-    const safeText = text.substring(0, 400).replace(/"/g, "'").replace(/\n/g, ' ');
-    const cmd = `edge-tts --voice uk-UA-OstapNeural --text "${safeText}" --write-media ${outputFile}`;
-    console.log('🎙 Запускаю edge-tts...');
-    exec(cmd, { timeout: 60000 }, (err) => {
-      if (err) { reject(new Error(`edge-tts: ${err.message}`)); }
-      else { console.log('🎙 Озвучка готова'); resolve(); }
-    });
-  });
-}
-
-// ─── Монтаж з Ken Burns ефектом ────────────────────────────────────────────
-
-function getAudioDuration(audioFile) {
-  try {
-    const result = execSync(
-      `ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${audioFile}"`
-    ).toString().trim();
-    return parseFloat(result) || 30;
-  } catch { return 30; }
-}
-
-function assembleVideo(imageFiles, audioFile, outputFile) {
-  if (imageFiles.length === 0) throw new Error('Немає зображень для монтажу');
-
-  const audioDuration = getAudioDuration(audioFile);
-  const imgDuration = Math.max(3, audioDuration / imageFiles.length);
-  const fps = 25;
-  const frames = Math.ceil(imgDuration * fps);
-
-  // Ken Burns: scale до 130% → плавний pan (без zoompan, легкий для пам'яті)
-  const kenBurns = [
-    `scale=936:1664,crop=720:1280:x='216*(t/${imgDuration.toFixed(2)})':y='384*(t/${imgDuration.toFixed(2)})'`,
-    `scale=936:1664,crop=720:1280:x='216*(1-t/${imgDuration.toFixed(2)})':y='0'`,
-    `scale=936:1664,crop=720:1280:x='0':y='384*(t/${imgDuration.toFixed(2)})'`,
-    `scale=936:1664,crop=720:1280:x='216*(1-t/${imgDuration.toFixed(2)})':y='384*(1-t/${imgDuration.toFixed(2)})'`,
-  ];
-
-  // Генеруємо кожен кліп з Ken Burns окремо
-  const clipFiles = [];
-  for (let i = 0; i < imageFiles.length; i++) {
-    const clipFile = `/tmp/clip_${i}.mp4`;
-    const effect = kenBurns[i % kenBurns.length];
-    const cmd = [
-      'ffmpeg -y -loglevel error',
-      `-loop 1 -i "${imageFiles[i]}"`,
-      `-vf "${effect}"`,
-      `-c:v libx264 -preset ultrafast -crf 28 -pix_fmt yuv420p`,
-      `-t ${imgDuration.toFixed(2)} -r ${fps} -threads 1`,
-      `"${clipFile}"`,
-    ].join(' ');
-    execSync(cmd, { stdio: 'pipe', timeout: 120000 });
-    clipFiles.push(clipFile);
-    console.log(`🎬 Кліп ${i + 1}/${imageFiles.length} з Ken Burns готовий`);
-  }
-
-  // Склеюємо кліпи
-  const listFile = '/tmp/clips.txt';
-  fs.writeFileSync(listFile, clipFiles.map(f => `file '${f}'`).join('\n'));
+  // Crop до 9:16, обрізати до потрібної тривалості, накласти текст
+  const vf = [
+    `scale='if(gt(iw/ih,9/16),trunc(ih*9/16/2)*2,iw)':'if(gt(iw/ih,9/16),ih,trunc(iw*16/9/2)*2)'`,
+    `pad=720:1280:(ow-iw)/2:(oh-ih)/2:black`,
+    `drawtext=textfile='${textFile}':fontcolor=white:fontsize=52:x=(w-text_w)/2:y=h-200:line_spacing=15:shadowcolor=black@0.9:shadowx=3:shadowy=3`,
+  ].join(',');
 
   const cmd = [
     'ffmpeg -y -loglevel error',
-    `-f concat -safe 0 -i "${listFile}"`,
-    `-i "${audioFile}"`,
+    `-i "${inputFile}"`,
+    `-t ${duration.toFixed(2)}`,
+    `-vf "${vf}"`,
     '-c:v libx264 -preset ultrafast -crf 28 -pix_fmt yuv420p',
-    '-c:a aac -shortest -threads 1',
+    '-an -threads 1',
     `"${outputFile}"`,
   ].join(' ');
 
-  console.log('🎬 Фінальний монтаж...');
-  execSync(cmd, { stdio: 'pipe', timeout: 180000 });
-  console.log('🎬 Відео готове!');
+  execSync(cmd, { stdio: 'pipe', timeout: 120000 });
 }
 
 // ─── Парсинг сценарію ──────────────────────────────────────────────────────
 
-function extractVoiceText(script) {
-  const lines = script.split('\n');
-  const voiceLines = lines.filter(l => {
-    const clean = l.trim();
-    return clean.length > 10
-      && !clean.startsWith('#')
-      && !clean.startsWith('🎵')
-      && !clean.startsWith('📸')
-      && !clean.startsWith('🎬')
-      && !clean.startsWith('⏱')
-      && !clean.startsWith('🎯')
-      && !clean.startsWith('🎭')
-      && !clean.startsWith('📖')
-      && !clean.startsWith('#️⃣')
-      && !clean.startsWith('[')
-      && !clean.match(/^\d+-\d+с/);
-  });
-  return voiceLines.join(' ').replace(/\*\*/g, '').replace(/\*/g, '').trim();
+function extractScriptSegments(script) {
+  const segments = [];
+  const hookMatch  = script.match(/ХУК[:\s]+([^\n\[]+)/);
+  const zmistMatch = script.match(/ЗМІСТ[:\s]+([^\n\[]+)/);
+  const rozvMatch  = script.match(/РОЗВИТОК[:\s]+([^\n\[]+)/);
+  const finalMatch = script.match(/ФІНАЛ[^:\n]*[:\s]+([^\n\[]+)/);
+
+  if (hookMatch)  segments.push(hookMatch[1].trim().substring(0, 80));
+  if (zmistMatch) segments.push(zmistMatch[1].trim().substring(0, 80));
+  if (rozvMatch)  segments.push(rozvMatch[1].trim().substring(0, 80));
+  if (finalMatch) segments.push(finalMatch[1].trim().substring(0, 80));
+
+  const defaults = ['Динозаври прокидаються', 'Мезозойська ера', 'Зустріч крізь час', 'Підписуйся!'];
+  while (segments.length < 4) segments.push(defaults[segments.length]);
+  return segments.slice(0, 4);
 }
 
-function extractImagePrompts(script) {
-  const baseStyle = 'cinematic, photorealistic, 8k, dramatic lighting, vertical format 9:16';
-  const prompts = [];
-
-  const cadryMatch = script.match(/📸[^:]*:([\s\S]*?)(?=🎵|#️⃣|$)/);
-  if (cadryMatch) {
-    const lines = cadryMatch[1].split('\n').filter(l => l.trim().length > 5);
-    lines.slice(0, 4).forEach(line => {
-      const clean = line.trim().replace(/^[-•*]\s*/, '');
-      prompts.push(`${clean}, ${baseStyle}`);
-    });
+function extractSearchQuery(script) {
+  // Витягуємо тему для пошуку на Pexels (англійською — краще результати)
+  const imageMatch = script.match(/📸[^:]*:([\s\S]*?)(?=🎵|#️⃣|$)/);
+  if (imageMatch) {
+    const firstLine = imageMatch[1].split('\n').find(l => l.trim().length > 10);
+    if (firstLine) {
+      const clean = firstLine.trim().replace(/^[-•*]\s*/, '').substring(0, 60);
+      return clean;
+    }
   }
+  return 'dinosaur prehistoric jungle';
+}
 
-  const dinoDefaults = [
-    `T-Rex roaring in dense jungle at sunset, small primitive humans watching from distance, ${baseStyle}`,
-    `primitive humans running from stampede of triceratops, dramatic sky, ${baseStyle}`,
-    `Velociraptor pack hunting near river, early humans hiding in tall grass, ${baseStyle}`,
-    `massive Brachiosaurus herd crossing river at golden hour, breathtaking landscape, ${baseStyle}`,
-  ];
+// ─── Fallback: кольоровий фон + текст ─────────────────────────────────────
 
-  while (prompts.length < 4) {
-    prompts.push(dinoDefaults[prompts.length % dinoDefaults.length]);
+function createFallbackClip(text, index, outputFile, duration) {
+  const bgColors = ['0d1b2a', '1b0a2a', '0a2818', '2a1808'];
+  const color = bgColors[index % bgColors.length];
+  const textFile = `/tmp/fallback_text_${index}.txt`;
+
+  const words = text.split(' ');
+  const lines = [];
+  let line = '';
+  for (const w of words) {
+    if ((line + ' ' + w).trim().length > 20) {
+      if (line) lines.push(line.trim());
+      line = w;
+    } else {
+      line = (line + ' ' + w).trim();
+    }
   }
+  if (line) lines.push(line.trim());
+  fs.writeFileSync(textFile, lines.slice(0, 4).join('\n'));
 
-  return prompts.slice(0, 4);
+  const cmd = [
+    'ffmpeg -y -loglevel error',
+    `-f lavfi -i "color=c=${color}:size=720x1280:rate=25"`,
+    `-t ${duration.toFixed(2)}`,
+    `-vf "drawtext=textfile='${textFile}':fontcolor=white:fontsize=52:x=(w-text_w)/2:y=(h-text_h)/2:line_spacing=15:shadowcolor=black@0.8:shadowx=3:shadowy=3"`,
+    '-c:v libx264 -preset ultrafast -crf 28 -pix_fmt yuv420p',
+    '-an -threads 1',
+    `"${outputFile}"`,
+  ].join(' ');
+
+  execSync(cmd, { stdio: 'pipe', timeout: 60000 });
+  console.log(`🎨 Fallback кліп ${index + 1} готовий`);
 }
 
 // ─── Головна функція ───────────────────────────────────────────────────────
@@ -224,23 +195,58 @@ async function makeShortVideo(script) {
   const workDir = `/tmp/short_${Date.now()}`;
   fs.mkdirSync(workDir, { recursive: true });
 
+  const CLIP_DURATION = 7.5; // секунд на кліп (4 кліпи = 30 сек)
+  const CLIP_COUNT = 4;
+
   try {
-    const voiceText = extractVoiceText(script);
-    const imagePrompts = extractImagePrompts(script);
+    const segments = extractScriptSegments(script);
+    const searchQuery = extractSearchQuery(script);
 
-    console.log(`📝 Текст озвучки (${voiceText.length} символів): ${voiceText.substring(0, 80)}...`);
-    console.log(`🖼 Промптів: ${imagePrompts.length}`);
+    console.log(`🔍 Пошуковий запит: "${searchQuery}"`);
+    console.log(`📝 Сегментів тексту: ${segments.length}`);
 
-    const audioFile = `${workDir}/voice.mp3`;
-    const [imageFiles] = await Promise.all([
-      generateImages(imagePrompts),
-      generateVoice(voiceText, audioFile),
-    ]);
+    // Завантажуємо відео з Pexels
+    const pexelsClips = await downloadPexelsClips(searchQuery, CLIP_COUNT);
+    console.log(`📦 Завантажено ${pexelsClips.length} кліпів з Pexels`);
 
-    if (imageFiles.length === 0) throw new Error('Не вдалось згенерувати зображення');
+    // Обробляємо кожен кліп: кроп + текст
+    const processedClips = [];
+    for (let i = 0; i < CLIP_COUNT; i++) {
+      const outputClip = `${workDir}/clip_${i}.mp4`;
+      const text = segments[i] || segments[0];
+
+      if (pexelsClips[i]) {
+        try {
+          processClip(pexelsClips[i], outputClip, CLIP_DURATION, text, i);
+          processedClips.push(outputClip);
+          console.log(`✂️ Кліп ${i + 1}/${CLIP_COUNT} оброблено`);
+        } catch (e) {
+          console.warn(`⚠️ Обробка кліпу ${i + 1} не вдалась: ${e.message}, fallback...`);
+          createFallbackClip(text, i, outputClip, CLIP_DURATION);
+          processedClips.push(outputClip);
+        }
+      } else {
+        createFallbackClip(text, i, outputClip, CLIP_DURATION);
+        processedClips.push(outputClip);
+      }
+    }
+
+    // Склеюємо всі кліпи
+    const listFile = `${workDir}/clips.txt`;
+    fs.writeFileSync(listFile, processedClips.map(f => `file '${f}'`).join('\n'));
 
     const outputFile = `${workDir}/short.mp4`;
-    assembleVideo(imageFiles, audioFile, outputFile);
+    const cmd = [
+      'ffmpeg -y -loglevel error',
+      `-f concat -safe 0 -i "${listFile}"`,
+      '-c:v libx264 -preset ultrafast -crf 28 -pix_fmt yuv420p',
+      '-threads 1',
+      `"${outputFile}"`,
+    ].join(' ');
+
+    console.log('🎬 Фінальний монтаж...');
+    execSync(cmd, { stdio: 'pipe', timeout: 180000 });
+    console.log('🎬 Відео готове!');
 
     return outputFile;
   } catch (e) {
