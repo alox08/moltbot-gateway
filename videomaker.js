@@ -126,6 +126,7 @@ function assembleVideo(imageFiles, audioFile, outputFile) {
     `-f concat -safe 0 -i "${listFile}"`,
     `-i "${audioFile}"`,
     '-c:v libx264 -preset ultrafast -crf 28 -threads 1',
+    '-pix_fmt yuv420p',
     '-c:a aac -shortest',
     '-vf "scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280"',
     `"${outputFile}"`,
