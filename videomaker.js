@@ -15,8 +15,8 @@ async function generateImageStability(prompt, dest) {
         { text: 'blurry, low quality, text, watermark', weight: -1 },
       ],
       cfg_scale: 7,
-      height: 1024,
-      width: 576,
+      height: 1344,
+      width: 768,
       samples: 1,
       steps: 30,
     });
