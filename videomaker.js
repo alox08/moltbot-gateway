@@ -125,12 +125,12 @@ function assembleVideo(imageFiles, audioFile, outputFile) {
   const fps = 25;
   const frames = Math.ceil(imgDuration * fps);
 
-  // Ken Burns ефекти: zoom in, pan right, zoom out, pan left
+  // Ken Burns: scale до 130% → плавний pan (без zoompan, легкий для пам'яті)
   const kenBurns = [
-    `scale=8000:-1,zoompan=z='min(zoom+0.0015,1.5)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=${frames}:s=720x1280:fps=${fps}`,
-    `scale=8000:-1,zoompan=z='1.3':x='if(lte(on,1),0,x+1.5)':y='ih/2-(ih/zoom/2)':d=${frames}:s=720x1280:fps=${fps}`,
-    `scale=8000:-1,zoompan=z='max(zoom-0.001,1.0)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=${frames}:s=720x1280:fps=${fps}`,
-    `scale=8000:-1,zoompan=z='1.2':x='if(lte(on,1),iw,x-1.5)':y='ih/2-(ih/zoom/2)':d=${frames}:s=720x1280:fps=${fps}`,
+    `scale=936:1664,crop=720:1280:x='216*(t/${imgDuration.toFixed(2)})':y='384*(t/${imgDuration.toFixed(2)})'`,
+    `scale=936:1664,crop=720:1280:x='216*(1-t/${imgDuration.toFixed(2)})':y='0'`,
+    `scale=936:1664,crop=720:1280:x='0':y='384*(t/${imgDuration.toFixed(2)})'`,
+    `scale=936:1664,crop=720:1280:x='216*(1-t/${imgDuration.toFixed(2)})':y='384*(1-t/${imgDuration.toFixed(2)})'`,
   ];
 
   // Генеруємо кожен кліп з Ken Burns окремо
@@ -143,7 +143,7 @@ function assembleVideo(imageFiles, audioFile, outputFile) {
       `-loop 1 -i "${imageFiles[i]}"`,
       `-vf "${effect}"`,
       `-c:v libx264 -preset ultrafast -crf 28 -pix_fmt yuv420p`,
-      `-t ${imgDuration.toFixed(2)} -threads 1`,
+      `-t ${imgDuration.toFixed(2)} -r ${fps} -threads 1`,
       `"${clipFile}"`,
     ].join(' ');
     execSync(cmd, { stdio: 'pipe', timeout: 120000 });
