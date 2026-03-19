@@ -142,16 +142,18 @@ function extractScriptSegments(script) {
 }
 
 function extractSearchQuery(script) {
-  // Витягуємо тему для пошуку на Pexels (англійською — краще результати)
+  // Беремо перші слова першого англійського промпту (до коми або 3 слова)
   const imageMatch = script.match(/📸[^:]*:([\s\S]*?)(?=🎵|#️⃣|$)/);
   if (imageMatch) {
     const firstLine = imageMatch[1].split('\n').find(l => l.trim().length > 10);
     if (firstLine) {
-      const clean = firstLine.trim().replace(/^[-•*]\s*/, '').substring(0, 60);
-      return clean;
+      const clean = firstLine.trim().replace(/^[-•*]\s*/, '');
+      // Беремо перші 3 слова
+      const words = clean.split(/[\s,]+/).slice(0, 3).join(' ');
+      if (words.length > 3) return words;
     }
   }
-  return 'dinosaur prehistoric jungle';
+  return 'dinosaur prehistoric';
 }
 
 // ─── Fallback: кольоровий фон + текст ─────────────────────────────────────
