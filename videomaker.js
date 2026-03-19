@@ -105,8 +105,9 @@ function processClip(inputFile, outputFile, duration, text, index) {
   // Crop до 9:16, обрізати до потрібної тривалості, накласти текст
   const vf = [
     `scale='if(gt(iw/ih,9/16),trunc(ih*9/16/2)*2,iw)':'if(gt(iw/ih,9/16),ih,trunc(iw*16/9/2)*2)'`,
-    `pad=720:1280:(ow-iw)/2:(oh-ih)/2:black`,
-    `drawtext=textfile='${textFile}':fontcolor=white:fontsize=52:x=(w-text_w)/2:y=h-200:line_spacing=15:shadowcolor=black@0.9:shadowx=3:shadowy=3`,
+    `pad=480:854:(ow-iw)/2:(oh-ih)/2:black`,
+    `scale=480:854`,
+    `drawtext=textfile='${textFile}':fontcolor=white:fontsize=38:x=(w-text_w)/2:y=h-150:line_spacing=12:shadowcolor=black@0.9:shadowx=2:shadowy=2`,
   ].join(',');
 
   const cmd = [
@@ -114,7 +115,7 @@ function processClip(inputFile, outputFile, duration, text, index) {
     `-i "${inputFile}"`,
     `-t ${duration.toFixed(2)}`,
     `-vf "${vf}"`,
-    '-c:v libx264 -preset ultrafast -crf 28 -pix_fmt yuv420p',
+    '-c:v libx264 -preset ultrafast -crf 33 -pix_fmt yuv420p',
     '-an -threads 1',
     `"${outputFile}"`,
   ].join(' ');
@@ -177,7 +178,7 @@ function createFallbackClip(text, index, outputFile, duration) {
 
   const cmd = [
     'ffmpeg -y -loglevel error',
-    `-f lavfi -i "color=c=${color}:size=720x1280:rate=25"`,
+    `-f lavfi -i "color=c=${color}:size=480x854:rate=25"`,
     `-t ${duration.toFixed(2)}`,
     `-vf "drawtext=textfile='${textFile}':fontcolor=white:fontsize=52:x=(w-text_w)/2:y=(h-text_h)/2:line_spacing=15:shadowcolor=black@0.8:shadowx=3:shadowy=3"`,
     '-c:v libx264 -preset ultrafast -crf 28 -pix_fmt yuv420p',
@@ -195,7 +196,7 @@ async function makeShortVideo(script) {
   const workDir = `/tmp/short_${Date.now()}`;
   fs.mkdirSync(workDir, { recursive: true });
 
-  const CLIP_DURATION = 7.5; // секунд на кліп (4 кліпи = 30 сек)
+  const CLIP_DURATION = 6; // секунд на кліп (4 кліпи = 24 сек)
   const CLIP_COUNT = 4;
 
   try {
