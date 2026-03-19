@@ -104,9 +104,8 @@ function processClip(inputFile, outputFile, duration, text, index) {
 
   // Crop до 9:16, обрізати до потрібної тривалості, накласти текст
   const vf = [
-    `scale='if(gt(iw/ih,9/16),trunc(ih*9/16/2)*2,iw)':'if(gt(iw/ih,9/16),ih,trunc(iw*16/9/2)*2)'`,
-    `pad=480:854:(ow-iw)/2:(oh-ih)/2:black`,
-    `scale=480:854`,
+    `scale=480:854:force_original_aspect_ratio=increase`,
+    `crop=480:854`,
     `drawtext=textfile='${textFile}':fontcolor=white:fontsize=38:x=(w-text_w)/2:y=h-150:line_spacing=12:shadowcolor=black@0.9:shadowx=2:shadowy=2`,
   ].join(',');
 
