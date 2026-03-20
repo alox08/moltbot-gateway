@@ -51,7 +51,8 @@ HIP_Y      = NECK_Y + BODY_LEN
 ARM_LEN    = 90
 LW         = 9
 SHIRT_W    = 54   # ширина плечей сорочки
-SLEEVE_W   = 10   # товщина рукавів (тонші)
+SLEEVE_W   = 17   # товщина рукавів
+LEG_W      = 17   # товщина гомілок (однакова з руками)
 
 # ─── Шрифти ───────────────────────────────────────────────────────────────────
 
@@ -258,28 +259,35 @@ def draw_stickman(draw, frame_idx, talking=True):
     px, py = cx - SHIRT_W + 14, NECK_Y + 52
     draw.rectangle([px, py, px + 22, py + 20], fill=SHIRT_COL, outline=STICK_LINE, width=3)
 
-    # ── Рукави з ЛІКТЕМ (два сегменти) ──
-    # Ліва рука
+    # ── Рукави з плавним ЛІКТЕМ ──
+    # Ліва рука — лікоть зміщений мінімально (плавний згин)
     slx, sly = cx - SHIRT_W, arm_y
     lx2 = int(cx - SHIRT_W - ARM_LEN)
     ly2 = int(arm_y + 72 + swing)
-    elx = (slx + lx2) // 2 - 12
-    ely = (sly + ly2) // 2 + int(swing * 0.15) - 6
+    elx = (slx + lx2) // 2 - 5
+    ely = (sly + ly2) // 2 + int(swing * 0.1)
     _thick_arm(draw, slx, sly, elx, ely, SHIRT_COL, SLEEVE_W)
-    _thick_arm(draw, elx, ely, lx2, ly2, SHIRT_COL, SLEEVE_W - 1)
+    _thick_arm(draw, elx, ely, lx2, ly2, SHIRT_COL, SLEEVE_W)
+    # Закруглення в ліктьовому суглобі
+    draw.ellipse([elx - SLEEVE_W//2, ely - SLEEVE_W//2,
+                  elx + SLEEVE_W//2, ely + SLEEVE_W//2],
+                 fill=SHIRT_COL, outline=STICK_LINE, width=2)
 
     # Права рука
     srx, sry = cx + SHIRT_W, arm_y
     rx2 = int(cx + SHIRT_W + ARM_LEN)
     ry2 = int(arm_y + 72 - swing)
-    erx = (srx + rx2) // 2 + 12
-    ery = (sry + ry2) // 2 - int(swing * 0.15) - 6
+    erx = (srx + rx2) // 2 + 5
+    ery = (sry + ry2) // 2 - int(swing * 0.1)
     _thick_arm(draw, srx, sry, erx, ery, SHIRT_COL, SLEEVE_W)
-    _thick_arm(draw, erx, ery, rx2, ry2, SHIRT_COL, SLEEVE_W - 1)
+    _thick_arm(draw, erx, ery, rx2, ry2, SHIRT_COL, SLEEVE_W)
+    draw.ellipse([erx - SLEEVE_W//2, ery - SLEEVE_W//2,
+                  erx + SLEEVE_W//2, ery + SLEEVE_W//2],
+                 fill=SHIRT_COL, outline=STICK_LINE, width=2)
 
-    # Кулаки (кружечки на кінцях рук)
-    draw.ellipse([lx2-8, ly2-8, lx2+8, ly2+8], fill=WHITE, outline=STICK_LINE, width=3)
-    draw.ellipse([rx2-8, ry2-8, rx2+8, ry2+8], fill=WHITE, outline=STICK_LINE, width=3)
+    # Кулаки
+    draw.ellipse([lx2-9, ly2-9, lx2+9, ly2+9], fill=WHITE, outline=STICK_LINE, width=3)
+    draw.ellipse([rx2-9, ry2-9, rx2+9, ry2+9], fill=WHITE, outline=STICK_LINE, width=3)
 
     # ── Пояс ──
     draw.rectangle([cx - hip_w, HIP_Y,      cx + hip_w, HIP_Y + 18],
@@ -295,9 +303,12 @@ def draw_stickman(draw, frame_idx, talking=True):
     draw.rectangle([cx + 5,     mid_hip, cx + hip_w, leg_end],
                    fill=PANTS_COL, outline=STICK_LINE, width=LW)
 
-    # Гомілки
-    draw.line([(cx - hip_w // 2, leg_end), (cx - 52, GROUND_Y)], fill=STICK_LINE, width=LW)
-    draw.line([(cx + hip_w // 2, leg_end), (cx + 52, GROUND_Y)], fill=STICK_LINE, width=LW)
+    # Гомілки — товсті полігони (однакові з руками)
+    _thick_arm(draw, cx - hip_w // 2, leg_end, cx - 50, GROUND_Y, PANTS_COL, LEG_W)
+    _thick_arm(draw, cx + hip_w // 2, leg_end, cx + 50, GROUND_Y, PANTS_COL, LEG_W)
+    # Черевики
+    draw.ellipse([cx-62, GROUND_Y-8, cx-28, GROUND_Y+10], fill=STICK_LINE)
+    draw.ellipse([cx+28, GROUND_Y-8, cx+62, GROUND_Y+10], fill=STICK_LINE)
 
     # ── Приплюснута овальна голова ──
     draw.ellipse([cx - HEAD_RX, HEAD_CY - HEAD_RY,
