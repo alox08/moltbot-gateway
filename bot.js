@@ -170,19 +170,20 @@ const SYSTEM_STORY = `Ти StoryManager 📖 — субагент МолтБот
 const MODELS = [
   'meta-llama/llama-3.3-70b-instruct:free',
   'google/gemma-3-27b-it:free',
-  'deepseek/deepseek-chat-v3-0324:free',
-  'nvidia/nemotron-3-super-120b-a12b:free',
-  'mistralai/mistral-7b-instruct:free',
+  'google/gemma-3-12b-it:free',
   'qwen/qwen2.5-vl-72b-instruct:free',
+  'deepseek/deepseek-r1:free',
+  'nvidia/llama-3.1-nemotron-ultra-253b-v1:free',
 ];
 
 // Розумні моделі — для субагентів (/shorts, /story, /stickman)
 const MODELS_SMART = [
-  'meta-llama/llama-3.3-70b-instruct:free',   // надійна, швидка
+  'meta-llama/llama-3.3-70b-instruct:free',
   'google/gemma-3-27b-it:free',
-  'deepseek/deepseek-chat-v3-0324:free',
-  'microsoft/phi-4-reasoning-plus:free',       // думає довго, остання спроба
-  'mistralai/mistral-7b-instruct:free',
+  'deepseek/deepseek-r1:free',
+  'google/gemma-3-12b-it:free',
+  'qwen/qwen2.5-vl-72b-instruct:free',
+  'nvidia/llama-3.1-nemotron-ultra-253b-v1:free',
 ];
 
 let lastUsedModel = MODELS[0];
