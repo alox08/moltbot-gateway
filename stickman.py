@@ -304,10 +304,10 @@ def draw_stickman(draw, frame_idx, talking=True):
                   cx + HEAD_RX, HEAD_CY + HEAD_RY],
                  fill=WHITE, outline=STICK_LINE, width=LW)
 
-    # ── Тінь на лівій стороні ──
-    draw.ellipse([cx - HEAD_RX + 4,  HEAD_CY - HEAD_RY + 10,
-                  cx + 16,           HEAD_CY + HEAD_RY - 10],
-                 fill=(208, 208, 215))
+    # ── Легка тінь по лівому краю (вузька смужка) ──
+    draw.ellipse([cx - HEAD_RX + 4,  HEAD_CY - HEAD_RY + 8,
+                  cx - HEAD_RX + 38, HEAD_CY + HEAD_RY - 8],
+                 fill=(220, 220, 225))
     # Перемалювати контур поверх тіні
     draw.ellipse([cx - HEAD_RX, HEAD_CY - HEAD_RY,
                   cx + HEAD_RX, HEAD_CY + HEAD_RY],
