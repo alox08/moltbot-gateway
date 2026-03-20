@@ -39,18 +39,19 @@ PANTS_COL  = (40,  40,  110)   # Темно-сині штани
 BELT_COL   = (70,  40,  15)    # Коричневий пояс
 BUCKLE_COL = (200, 160, 30)    # Золота пряжка
 
-# Comic стиль — велика голова
+# Comic стиль — приплюснута голова (oval)
 CX         = W // 2
 GROUND_Y   = H - 90
-HEAD_R     = 90
+HEAD_RX    = 98   # горизонтальний радіус (ширший)
+HEAD_RY    = 84   # вертикальний радіус (приплюснута)
 HEAD_CY    = GROUND_Y - 430
-NECK_Y     = HEAD_CY + HEAD_R + 4
+NECK_Y     = HEAD_CY + HEAD_RY + 4
 BODY_LEN   = 130
 HIP_Y      = NECK_Y + BODY_LEN
-ARM_LEN    = 95
+ARM_LEN    = 90
 LW         = 9
 SHIRT_W    = 54   # ширина плечей сорочки
-SLEEVE_W   = 14   # товщина рукавів
+SLEEVE_W   = 10   # товщина рукавів (тонші)
 
 # ─── Шрифти ───────────────────────────────────────────────────────────────────
 
@@ -202,7 +203,7 @@ def draw_speech_bubble(draw, text, font):
                             radius=22, fill=BUBBLE_BG, outline=BUBBLE_BD, width=3)
 
     # Хвіст
-    tail_tip_y  = HEAD_CY - HEAD_R - 4
+    tail_tip_y  = HEAD_CY - HEAD_RY - 4
     tail_base_y = by2
     draw.polygon([(CX-16, tail_base_y), (CX+16, tail_base_y), (CX, tail_tip_y)],
                  fill=BUBBLE_BG)
@@ -257,18 +258,28 @@ def draw_stickman(draw, frame_idx, talking=True):
     px, py = cx - SHIRT_W + 14, NECK_Y + 52
     draw.rectangle([px, py, px + 22, py + 20], fill=SHIRT_COL, outline=STICK_LINE, width=3)
 
-    # ── Рукави (товсті полігони) ──
+    # ── Рукави з ЛІКТЕМ (два сегменти) ──
+    # Ліва рука
+    slx, sly = cx - SHIRT_W, arm_y
     lx2 = int(cx - SHIRT_W - ARM_LEN)
     ly2 = int(arm_y + 72 + swing)
-    _thick_arm(draw, cx - SHIRT_W, arm_y, lx2, ly2, SHIRT_COL, SLEEVE_W)
+    elx = (slx + lx2) // 2 - 12
+    ely = (sly + ly2) // 2 + int(swing * 0.15) - 6
+    _thick_arm(draw, slx, sly, elx, ely, SHIRT_COL, SLEEVE_W)
+    _thick_arm(draw, elx, ely, lx2, ly2, SHIRT_COL, SLEEVE_W - 1)
 
+    # Права рука
+    srx, sry = cx + SHIRT_W, arm_y
     rx2 = int(cx + SHIRT_W + ARM_LEN)
     ry2 = int(arm_y + 72 - swing)
-    _thick_arm(draw, cx + SHIRT_W, arm_y, rx2, ry2, SHIRT_COL, SLEEVE_W)
+    erx = (srx + rx2) // 2 + 12
+    ery = (sry + ry2) // 2 - int(swing * 0.15) - 6
+    _thick_arm(draw, srx, sry, erx, ery, SHIRT_COL, SLEEVE_W)
+    _thick_arm(draw, erx, ery, rx2, ry2, SHIRT_COL, SLEEVE_W - 1)
 
     # Кулаки (кружечки на кінцях рук)
-    draw.ellipse([lx2-9, ly2-9, lx2+9, ly2+9], fill=WHITE, outline=STICK_LINE, width=3)
-    draw.ellipse([rx2-9, ry2-9, rx2+9, ry2+9], fill=WHITE, outline=STICK_LINE, width=3)
+    draw.ellipse([lx2-8, ly2-8, lx2+8, ly2+8], fill=WHITE, outline=STICK_LINE, width=3)
+    draw.ellipse([rx2-8, ry2-8, rx2+8, ry2+8], fill=WHITE, outline=STICK_LINE, width=3)
 
     # ── Пояс ──
     draw.rectangle([cx - hip_w, HIP_Y,      cx + hip_w, HIP_Y + 18],
@@ -288,12 +299,22 @@ def draw_stickman(draw, frame_idx, talking=True):
     draw.line([(cx - hip_w // 2, leg_end), (cx - 52, GROUND_Y)], fill=STICK_LINE, width=LW)
     draw.line([(cx + hip_w // 2, leg_end), (cx + 52, GROUND_Y)], fill=STICK_LINE, width=LW)
 
-    # ── Велика біла голова ──
-    draw.ellipse([cx-HEAD_R, HEAD_CY-HEAD_R, cx+HEAD_R, HEAD_CY+HEAD_R],
+    # ── Приплюснута овальна голова ──
+    draw.ellipse([cx - HEAD_RX, HEAD_CY - HEAD_RY,
+                  cx + HEAD_RX, HEAD_CY + HEAD_RY],
                  fill=WHITE, outline=STICK_LINE, width=LW)
 
+    # ── Тінь на лівій стороні ──
+    draw.ellipse([cx - HEAD_RX + 4,  HEAD_CY - HEAD_RY + 10,
+                  cx + 16,           HEAD_CY + HEAD_RY - 10],
+                 fill=(208, 208, 215))
+    # Перемалювати контур поверх тіні
+    draw.ellipse([cx - HEAD_RX, HEAD_CY - HEAD_RY,
+                  cx + HEAD_RX, HEAD_CY + HEAD_RY],
+                 outline=STICK_LINE, width=LW)
+
     # ── Очі (3/4 поворот: ліве менше, праве більше) ──
-    ey = HEAD_CY - 10
+    ey = HEAD_CY - 8
 
     # Ліве oko (ближче до центру, менше — ефект перспективи)
     el_cx = cx - 28 + fs
@@ -314,7 +335,7 @@ def draw_stickman(draw, frame_idx, talking=True):
     draw.ellipse([er_cx-10, ey-16, er_cx, ey-6], fill=WHITE)
 
     # ── Брови ──
-    brow_y = ey - 36
+    brow_y = ey - er_r - 4
     draw.line([(el_cx - 22, brow_y+6), (el_cx + 22, brow_y)], fill=STICK_LINE, width=8)
     draw.line([(er_cx - 26, brow_y),   (er_cx + 28, brow_y+6)], fill=STICK_LINE, width=8)
 
