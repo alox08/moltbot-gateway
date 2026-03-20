@@ -164,14 +164,15 @@ const SYSTEM_STORY = `Ти StoryManager 📖 — субагент МолтБот
 // ─── LLM виклик з автоперемиканням ────────────────────────────────────────
 
 const MODELS = [
-  'nvidia/nemotron-3-super-120b-a12b:free',
   'meta-llama/llama-3.3-70b-instruct:free',
   'google/gemma-3-27b-it:free',
   'deepseek/deepseek-chat-v3-0324:free',
-  'microsoft/phi-4-reasoning-plus:free',
+  'nvidia/nemotron-3-super-120b-a12b:free',
   'mistralai/mistral-7b-instruct:free',
   'qwen/qwen2.5-vl-72b-instruct:free',
 ];
+
+let lastUsedModel = MODELS[0];
 
 async function callLLM(messages, maxTokens = 2000) {
   for (const model of MODELS) {
@@ -189,6 +190,7 @@ async function callLLM(messages, maxTokens = 2000) {
       const data = await res.json();
       if (data.choices?.[0]?.message?.content) {
         console.log(`✅ Модель: ${model}`);
+        lastUsedModel = model;
         return data.choices[0].message.content.trim();
       }
       console.warn(`⚠️ ${model} не відповів`);
@@ -228,8 +230,9 @@ async function orchestrate(channelId, userMessage, memoryBlock) {
   addToHistory(channelId, 'user', userMessage);
 
   // Оркестратор вирішує що робити
+  const modelInfo = `\n\nПоточна модель: ${lastUsedModel}`;
   const msgs = [
-    { role: 'system', content: SYSTEM_MAIN + memoryBlock },
+    { role: 'system', content: SYSTEM_MAIN + modelInfo + memoryBlock },
     ...getHistory(channelId),
   ];
   const raw = await callLLM(msgs);
