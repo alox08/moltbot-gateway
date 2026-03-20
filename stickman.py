@@ -34,18 +34,20 @@ STICK_LINE = (25,  25,  25)
 BUBBLE_BG  = (255, 255, 255)
 BUBBLE_BD  = (30,  30,  30)
 TEXT_COL   = (20,  20,  20)
+SHIRT_COL  = (50,  110, 220)   # Синя сорочка
+PANTS_COL  = (50,  50,  120)   # Темно-сині штани
 
 # Comic стиль — велика голова
 CX         = W // 2
 GROUND_Y   = H - 90
 HEAD_R     = 90
-HEAD_CY    = GROUND_Y - 420
+HEAD_CY    = GROUND_Y - 430
 NECK_Y     = HEAD_CY + HEAD_R + 4
-BODY_LEN   = 125
+BODY_LEN   = 130
 HIP_Y      = NECK_Y + BODY_LEN
-SHOULDER_Y = NECK_Y + 28
-ARM_LEN    = 82
+ARM_LEN    = 95
 LW         = 9
+SHIRT_W    = 52   # ширина плечей сорочки
 
 # ─── Шрифти ───────────────────────────────────────────────────────────────────
 
@@ -217,50 +219,76 @@ def draw_stickman(draw, frame_idx, talking=True):
     cx    = CX + sway
     swing = math.sin(frame_idx * 0.12) * 20
 
-    # Тіло
-    draw.line([(cx, NECK_Y), (cx, HIP_Y)], fill=STICK_LINE, width=LW)
-    # Руки
-    draw.line([(cx, SHOULDER_Y), (cx - ARM_LEN, SHOULDER_Y + 60 + int(swing))],
+    arm_y   = NECK_Y + 35          # висота плечей на сорочці
+    hip_w   = SHIRT_W + 18         # ширина бедер
+
+    # ── Сорочка (трапеція) ──
+    shirt_pts = [
+        (cx - SHIRT_W,     NECK_Y + 8),
+        (cx + SHIRT_W,     NECK_Y + 8),
+        (cx + hip_w,       HIP_Y),
+        (cx - hip_w,       HIP_Y),
+    ]
+    draw.polygon(shirt_pts, fill=SHIRT_COL, outline=STICK_LINE, width=LW)
+
+    # V-подібний комір
+    draw.polygon([
+        (cx - 18, NECK_Y + 8),
+        (cx,      NECK_Y + 45),
+        (cx + 18, NECK_Y + 8),
+    ], fill=WHITE, outline=STICK_LINE, width=3)
+
+    # ── Штани (два прямокутники) ──
+    mid_hip = HIP_Y + 10
+    draw.rectangle([cx - hip_w,  HIP_Y,    cx,          mid_hip + 80], fill=PANTS_COL, outline=STICK_LINE, width=LW)
+    draw.rectangle([cx,          HIP_Y,    cx + hip_w,  mid_hip + 80], fill=PANTS_COL, outline=STICK_LINE, width=LW)
+
+    # Ноги (гомілки)
+    leg_bot = GROUND_Y
+    draw.line([(cx - hip_w // 2, mid_hip + 80), (cx - 62, leg_bot)], fill=STICK_LINE, width=LW)
+    draw.line([(cx + hip_w // 2, mid_hip + 80), (cx + 62, leg_bot)], fill=STICK_LINE, width=LW)
+
+    # ── Руки ──
+    draw.line([(cx - SHIRT_W, arm_y),
+               (cx - SHIRT_W - ARM_LEN, arm_y + 70 + int(swing))],
               fill=STICK_LINE, width=LW)
-    draw.line([(cx, SHOULDER_Y), (cx + ARM_LEN, SHOULDER_Y + 60 - int(swing))],
+    draw.line([(cx + SHIRT_W, arm_y),
+               (cx + SHIRT_W + ARM_LEN, arm_y + 70 - int(swing))],
               fill=STICK_LINE, width=LW)
-    # Ноги
-    draw.line([(cx, HIP_Y), (cx - 62, GROUND_Y)], fill=STICK_LINE, width=LW)
-    draw.line([(cx, HIP_Y), (cx + 62, GROUND_Y)], fill=STICK_LINE, width=LW)
 
     # ── Велика біла голова (comic стиль) ──
     draw.ellipse([cx-HEAD_R, HEAD_CY-HEAD_R, cx+HEAD_R, HEAD_CY+HEAD_R],
                  fill=WHITE, outline=STICK_LINE, width=LW)
 
     # ── Великі comic очі ──
-    ey = HEAD_CY - 10
-    er, pr = 24, 13   # радіус ока, зіниці
+    ey = HEAD_CY - 8
+    er, pr = 30, 17   # великий радіус ока, зіниці
 
-    # Ліве око
-    draw.ellipse([cx-46-er, ey-er, cx-46+er, ey+er], fill=WHITE, outline=STICK_LINE, width=4)
-    draw.ellipse([cx-48-pr//2, ey-pr//2, cx-48+pr//2+3, ey+pr//2+3], fill=STICK_LINE)
-    draw.ellipse([cx-52, ey-10, cx-44, ey-3], fill=WHITE)  # блиск
+    # Ліве oko
+    draw.ellipse([cx-44-er, ey-er, cx-44+er, ey+er], fill=WHITE, outline=STICK_LINE, width=4)
+    draw.ellipse([cx-46-pr//2, ey-pr//2, cx-46+pr//2+2, ey+pr//2+2], fill=STICK_LINE)
+    draw.ellipse([cx-52, ey-13, cx-42, ey-5], fill=WHITE)  # блиск
 
-    # Праве око
-    draw.ellipse([cx+46-er, ey-er, cx+46+er, ey+er], fill=WHITE, outline=STICK_LINE, width=4)
-    draw.ellipse([cx+44-pr//2, ey-pr//2, cx+46+pr//2, ey+pr//2+3], fill=STICK_LINE)
-    draw.ellipse([cx+40, ey-10, cx+48, ey-3], fill=WHITE)  # блиск
+    # Праве oko
+    draw.ellipse([cx+44-er, ey-er, cx+44+er, ey+er], fill=WHITE, outline=STICK_LINE, width=4)
+    draw.ellipse([cx+44-pr//2, ey-pr//2, cx+44+pr//2+2, ey+pr//2+2], fill=STICK_LINE)
+    draw.ellipse([cx+40, ey-13, cx+50, ey-5], fill=WHITE)  # блиск
 
     # ── Брови — товсті ──
-    brow_y = ey - er - 10
-    draw.line([(cx-68, brow_y+5), (cx-22, brow_y)], fill=STICK_LINE, width=7)
-    draw.line([(cx+22, brow_y),   (cx+68, brow_y+5)], fill=STICK_LINE, width=7)
+    brow_y = ey - er - 8
+    draw.line([(cx-74, brow_y+6), (cx-16, brow_y)], fill=STICK_LINE, width=8)
+    draw.line([(cx+16, brow_y),   (cx+74, brow_y+6)], fill=STICK_LINE, width=8)
 
     # ── Рот — великий, виразний ──
-    my = HEAD_CY + 42
+    my = HEAD_CY + 44
     if talking and (frame_idx // 4) % 2 == 0:
         # Широко відкритий рот
-        draw.ellipse([cx-32, my-14, cx+32, my+20], fill=(180, 30, 30))
-        draw.rectangle([cx-24, my-12, cx+24, my-2], fill=WHITE)
-        draw.line([(cx, my-12), (cx, my-2)], fill=(210, 180, 180), width=3)
+        draw.ellipse([cx-34, my-15, cx+34, my+22], fill=(180, 30, 30))
+        draw.rectangle([cx-25, my-13, cx+25, my-2], fill=WHITE)
+        draw.line([(cx, my-13), (cx, my-2)], fill=(210, 180, 180), width=3)
     else:
         # Широка усмішка
-        draw.arc([cx-30, my-12, cx+30, my+20], 0, 180, fill=STICK_LINE, width=7)
+        draw.arc([cx-32, my-12, cx+32, my+22], 0, 180, fill=STICK_LINE, width=7)
 
 # ─── Генерація відео ──────────────────────────────────────────────────────────
 
