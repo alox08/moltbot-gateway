@@ -49,9 +49,9 @@ BODY_LEN   = 165
 HIP_Y      = NECK_Y + BODY_LEN
 ARM_LEN    = 90
 LW         = 9
-SHIRT_W    = 54   # ширина плечей сорочки
+SHIRT_W    = 62   # ширина плечей сорочки
 SLEEVE_W   = 17   # товщина рукавів
-LEG_W      = 17   # товщина гомілок (однакова з руками)
+LEG_W      = 18   # товщина гомілок (однакова з руками)
 
 # ─── Шрифти ───────────────────────────────────────────────────────────────────
 
@@ -316,20 +316,20 @@ def draw_stickman(draw, frame_idx, talking=True):
     # ── Ноги прямо з тулуба (без розриву) ──
     leg_end = HIP_Y + 100
     # Ліва нога — починається з нижнього краю куртки
-    _smooth_limb(draw, [(cx - hip_w // 2, HIP_Y + 8), (cx - 44, leg_end)],
+    _smooth_limb(draw, [(cx - hip_w // 2, HIP_Y + 8), (cx - 52, leg_end)],
                  STICK_LINE, LEG_W)
     # Права нога
-    _smooth_limb(draw, [(cx + hip_w // 2, HIP_Y + 8), (cx + 44, leg_end)],
+    _smooth_limb(draw, [(cx + hip_w // 2, HIP_Y + 8), (cx + 52, leg_end)],
                  STICK_LINE, LEG_W)
     # Гомілки
-    _smooth_limb(draw, [(cx - 44, leg_end), (cx - 44, GROUND_Y)],
+    _smooth_limb(draw, [(cx - 52, leg_end), (cx - 52, GROUND_Y)],
                  STICK_LINE, LEG_W)
-    _smooth_limb(draw, [(cx + 44, leg_end), (cx + 44, GROUND_Y)],
+    _smooth_limb(draw, [(cx + 52, leg_end), (cx + 52, GROUND_Y)],
                  STICK_LINE, LEG_W)
     # Черевики
-    draw.rounded_rectangle([cx - 62, GROUND_Y - 6, cx - 22, GROUND_Y + 14],
+    draw.rounded_rectangle([cx - 70, GROUND_Y - 6, cx - 28, GROUND_Y + 14],
                             radius=7, fill=STICK_LINE)
-    draw.rounded_rectangle([cx + 22, GROUND_Y - 6, cx + 62, GROUND_Y + 14],
+    draw.rounded_rectangle([cx + 28, GROUND_Y - 6, cx + 70, GROUND_Y + 14],
                             radius=7, fill=STICK_LINE)
 
     # ── Голова з тінню (серп зліва) ──
@@ -351,7 +351,7 @@ def draw_stickman(draw, frame_idx, talking=True):
 
     # Ліве oko (ближче до центру, менше — ефект перспективи)
     el_cx = cx - 28 + fs
-    er_l, pr_l = 26, 14
+    er_l, pr_l = 29, 16
     draw.ellipse([el_cx-er_l, ey-er_l, el_cx+er_l, ey+er_l],
                  fill=WHITE, outline=STICK_LINE, width=4)
     draw.ellipse([el_cx-pr_l//2+2, ey-pr_l//2, el_cx+pr_l//2+2, ey+pr_l//2+2],
@@ -360,7 +360,7 @@ def draw_stickman(draw, frame_idx, talking=True):
 
     # Праве oko (більше — ближче до глядача)
     er_cx = cx + 42 + fs // 2
-    er_r, pr_r = 33, 19
+    er_r, pr_r = 36, 21
     draw.ellipse([er_cx-er_r, ey-er_r, er_cx+er_r, ey+er_r],
                  fill=WHITE, outline=STICK_LINE, width=4)
     draw.ellipse([er_cx-pr_r//2+3, ey-pr_r//2, er_cx+pr_r//2+3, ey+pr_r//2+3],
