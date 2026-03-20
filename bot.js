@@ -166,6 +166,7 @@ const SYSTEM_STORY = `Ти StoryManager 📖 — субагент МолтБот
 
 // ─── LLM виклик з автоперемиканням ────────────────────────────────────────
 
+// Швидкі моделі — для чату та оркестратора
 const MODELS = [
   'meta-llama/llama-3.3-70b-instruct:free',
   'google/gemma-3-27b-it:free',
@@ -175,10 +176,17 @@ const MODELS = [
   'qwen/qwen2.5-vl-72b-instruct:free',
 ];
 
+// Розумні моделі — для субагентів (/shorts, /story, /stickman)
+// Phi-4 думає довше але видає кращий результат
+const MODELS_SMART = [
+  'microsoft/phi-4-reasoning-plus:free',
+  'meta-llama/llama-3.3-70b-instruct:free',  // fallback якщо phi-4 недоступна
+];
+
 let lastUsedModel = MODELS[0];
 
-async function callLLM(messages, maxTokens = 2000) {
-  for (const model of MODELS) {
+async function callLLMWithList(models, messages, maxTokens = 2000) {
+  for (const model of models) {
     try {
       const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
@@ -204,6 +212,16 @@ async function callLLM(messages, maxTokens = 2000) {
   return null;
 }
 
+// Швидкий виклик — для чату
+async function callLLM(messages, maxTokens = 2000) {
+  return callLLMWithList(MODELS, messages, maxTokens);
+}
+
+// Розумний виклик — для субагентів (phi-4 думає, але краща якість)
+async function callLLMSmart(messages, maxTokens = 2000) {
+  return callLLMWithList(MODELS_SMART, messages, maxTokens);
+}
+
 function cleanReply(text) {
   return text.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
 }
@@ -217,10 +235,15 @@ const AGENT_PROMPTS = {
   joke:   SYSTEM_JOKE,
 };
 
+// Субагенти що потребують якості — використовують phi-4
+const SMART_AGENTS = ['shorts', 'story', 'joke'];
+
 async function callAgent(agentType, task, memoryBlock = '') {
   const systemPrompt = (AGENT_PROMPTS[agentType] || AGENT_PROMPTS.main) + memoryBlock;
-  console.log(`🤖 Субагент [${agentType}]: "${task.substring(0, 60)}"`);
-  const reply = await callLLM([
+  const useSmart = SMART_AGENTS.includes(agentType);
+  console.log(`🤖 Субагент [${agentType}] (${useSmart ? 'phi-4' : 'fast'}): "${task.substring(0, 60)}"`);
+  const llm = useSmart ? callLLMSmart : callLLM;
+  const reply = await llm([
     { role: 'system', content: systemPrompt },
     { role: 'user', content: task },
   ]);
