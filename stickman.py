@@ -45,7 +45,7 @@ HEAD_RX    = 98   # горизонтальний радіус (ширший)
 HEAD_RY    = 84   # вертикальний радіус (приплюснута)
 HEAD_CY    = GROUND_Y - 430
 NECK_Y     = HEAD_CY + HEAD_RY + 4
-BODY_LEN   = 130
+BODY_LEN   = 165
 HIP_Y      = NECK_Y + BODY_LEN
 ARM_LEN    = 90
 LW         = 9
@@ -265,32 +265,52 @@ def draw_stickman(draw, frame_idx, talking=True):
     _smooth_limb(draw, [(rx_sh, ry_sh), (rx_el, ry_el), (rx_h, ry_h)],
                  STICK_LINE, SLEEVE_W)
 
-    # ── Куртка з закругленими кутами ──
-    # Білий комір/сорочка по центру
-    draw.rounded_rectangle([cx - 18, NECK_Y + 2, cx + 18, HIP_Y + 4],
-                            radius=8, fill=WHITE)
-    # Ліва половина куртки
-    draw.rounded_rectangle([cx - hip_w, NECK_Y + 4, cx + 6, HIP_Y + 8],
-                            radius=20, fill=SHIRT_COL, outline=STICK_LINE, width=3)
-    # Права половина куртки
-    draw.rounded_rectangle([cx - 6, NECK_Y + 4, cx + hip_w, HIP_Y + 8],
-                            radius=20, fill=SHIRT_COL, outline=STICK_LINE, width=3)
-    # Центральна лінія куртки
-    draw.line([(cx, NECK_Y + 4), (cx, HIP_Y + 8)], fill=STICK_LINE, width=3)
+    # ── Куртка — ОДНА суцільна форма ──
+    # Спочатку біла сорочка під курткою (видно у V-вирізі)
+    draw.rounded_rectangle([cx - hip_w + 8, NECK_Y + 2,
+                             cx + hip_w - 8, HIP_Y + 8],
+                            radius=18, fill=WHITE)
 
-    # Лацкани (відвороти комірця)
-    draw.polygon([(cx - 18, NECK_Y + 2), (cx - 28, NECK_Y + 35), (cx, NECK_Y + 55)],
-                 fill=WHITE, outline=STICK_LINE, width=2)
-    draw.polygon([(cx + 18, NECK_Y + 2), (cx + 28, NECK_Y + 35), (cx, NECK_Y + 55)],
-                 fill=WHITE, outline=STICK_LINE, width=2)
+    # Суцільна синя куртка поверх
+    draw.rounded_rectangle([cx - hip_w, NECK_Y + 4,
+                             cx + hip_w, HIP_Y + 8],
+                            radius=22, fill=SHIRT_COL, outline=STICK_LINE, width=3)
+
+    # V-виріз — вирізаємо трикутник (білий) по центру зверху
+    v_depth = NECK_Y + 75  # глибина V-вирізу
+    draw.polygon([
+        (cx - 22, NECK_Y + 4),
+        (cx + 22, NECK_Y + 4),
+        (cx,      v_depth),
+    ], fill=WHITE)
+
+    # Лівий лацкан (відворот)
+    draw.polygon([
+        (cx - 22, NECK_Y + 4),
+        (cx - 38, NECK_Y + 30),
+        (cx - 20, v_depth - 10),
+        (cx,      v_depth),
+    ], fill=SHIRT_COL, outline=STICK_LINE, width=2)
+
+    # Правий лацкан
+    draw.polygon([
+        (cx + 22, NECK_Y + 4),
+        (cx + 38, NECK_Y + 30),
+        (cx + 20, v_depth - 10),
+        (cx,      v_depth),
+    ], fill=SHIRT_COL, outline=STICK_LINE, width=2)
+
+    # Обводка V-вирізу
+    draw.line([(cx - 22, NECK_Y + 4), (cx, v_depth)], fill=STICK_LINE, width=3)
+    draw.line([(cx + 22, NECK_Y + 4), (cx, v_depth)], fill=STICK_LINE, width=3)
 
     # Краватка
     draw.polygon([
-        (cx - 7,  NECK_Y + 52),
-        (cx + 7,  NECK_Y + 52),
-        (cx + 10, NECK_Y + 95),
-        (cx,      NECK_Y + 115),
-        (cx - 10, NECK_Y + 95),
+        (cx - 7,  v_depth - 5),
+        (cx + 7,  v_depth - 5),
+        (cx + 11, v_depth + 45),
+        (cx,      v_depth + 65),
+        (cx - 11, v_depth + 45),
     ], fill=TIE_COL, outline=STICK_LINE, width=2)
 
     # ── Ноги прямо з тулуба (без розриву) ──
