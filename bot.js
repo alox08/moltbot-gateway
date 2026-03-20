@@ -178,10 +178,10 @@ const MODELS = [
 
 // Розумні моделі — для субагентів (/shorts, /story, /stickman)
 const MODELS_SMART = [
-  'microsoft/phi-4-reasoning-plus:free',
-  'deepseek/deepseek-chat-v3-0324:free',
-  'meta-llama/llama-3.3-70b-instruct:free',
+  'meta-llama/llama-3.3-70b-instruct:free',   // надійна, швидка
   'google/gemma-3-27b-it:free',
+  'deepseek/deepseek-chat-v3-0324:free',
+  'microsoft/phi-4-reasoning-plus:free',       // думає довго, остання спроба
   'mistralai/mistral-7b-instruct:free',
 ];
 
@@ -201,6 +201,10 @@ async function callLLMWithList(models, messages, maxTokens = 2000) {
         body: JSON.stringify({ model, messages, max_tokens: maxTokens }),
       });
       const data = await res.json();
+      if (data.error) {
+        console.warn(`⚠️ ${model} — помилка: ${data.error.code} ${data.error.message?.substring(0, 80)}`);
+        continue;
+      }
       const raw = data.choices?.[0]?.message?.content?.trim();
       const content = raw ? raw.replace(/<think>[\s\S]*?<\/think>/g, '').trim() : '';
       if (content) {
