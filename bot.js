@@ -1,6 +1,6 @@
 const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, AttachmentBuilder } = require('discord.js');
 const { QdrantClient } = require('@qdrant/js-client-rest');
-const { makeShortVideo } = require('./videomaker');
+const { makeShortVideo, makeStickmanVideo } = require('./videomaker');
 const fs = require('fs');
 
 // ─── Архіваріус ────────────────────────────────────────────────────────────
@@ -134,6 +134,14 @@ const SYSTEM_SHORTS = `Ти ShortsManager 🎬 — субагент МолтБо
 
 Якщо в секції [ПАМ'ЯТЬ] є схожі минулі сценарії — врахуй їх.`;
 
+const SYSTEM_JOKE = `Ти генератор коротких смішних жартів для стікмен-анімації на YouTube.
+Напиши ОДИН короткий жарт на задану тему.
+ВАЖЛИВО:
+- Рівно 2-4 речення, не більше
+- Без вступів типу "Ось жарт:" або пояснень після
+- Без емодзі та зайвих символів
+- Відповідай ТІЛЬКИ текстом жарту українською мовою`;
+
 const SYSTEM_STORY = `Ти StoryManager 📖 — субагент МолтБота для коротких оповідань.
 Відповідай ТІЛЬКИ українською мовою.
 Генеруй короткі оповідання для YouTube (2-5 хвилин озвучки).
@@ -201,6 +209,7 @@ const AGENT_PROMPTS = {
   main:   SYSTEM_MAIN,
   shorts: SYSTEM_SHORTS,
   story:  SYSTEM_STORY,
+  joke:   SYSTEM_JOKE,
 };
 
 async function callAgent(agentType, task, memoryBlock = '') {
@@ -273,12 +282,16 @@ async function registerCommands() {
       .setName('makevideo')
       .setDescription('Генерує відео Short: сценарій + AI-зображення + озвучка + монтаж')
       .addStringOption(o => o.setName('тема').setDescription('Тема відео').setRequired(true)),
+    new SlashCommandBuilder()
+      .setName('stickman')
+      .setDescription('Стікмен відео: AI генерує жарт + озвучка + анімація')
+      .addStringOption(o => o.setName('тема').setDescription('Тема жарту').setRequired(true)),
   ].map(c => c.toJSON());
 
   const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
   try {
     await rest.put(Routes.applicationCommands(bot.user.id), { body: commands });
-    console.log('✅ Slash команди зареєстровано: /shorts /story /makevideo');
+    console.log('✅ Slash команди зареєстровано: /shorts /story /makevideo /stickman');
   } catch (e) {
     console.error('Помилка реєстрації команд:', e.message);
   }
@@ -361,6 +374,28 @@ bot.on('interactionCreate', async (interaction) => {
       await interaction.followUp(`⚠️ Відео не вдалось: ${e.message}`);
     }
     archiveSave(interaction.user.id, tema, script, 'makevideo');
+
+  } else if (cmd === 'stickman') {
+    // ── Стікмен: AI жарт → edge-tts → Pillow анімація → MP4 ──
+    console.log(`🕺 /stickman: "${tema}"`);
+    await interaction.editReply('📝 Генерую жарт...');
+
+    const joke = await callAgent('joke', tema);
+    if (!joke) { await interaction.editReply('⚠️ Не вдалось згенерувати жарт.'); return; }
+
+    const cleanJoke = joke.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+    await interaction.editReply(`📝 Жарт: *${cleanJoke}*\n\n🎙 Озвучую + малюю стікмена...`);
+
+    try {
+      const videoFile = await makeStickmanVideo(cleanJoke);
+      const attachment = new AttachmentBuilder(videoFile, { name: 'stickman.mp4' });
+      await interaction.followUp({ content: '✅ Готово! 🕺', files: [attachment] });
+      fs.unlinkSync(videoFile);
+    } catch (e) {
+      console.error('stickman помилка:', e.message);
+      await interaction.followUp(`⚠️ Помилка: ${e.message}`);
+    }
+    archiveSave(interaction.user.id, tema, cleanJoke, 'stickman');
   }
 });
 

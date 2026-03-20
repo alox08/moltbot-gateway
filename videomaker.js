@@ -3,6 +3,26 @@ const fs = require('fs');
 const https = require('https');
 const http = require('http');
 
+// ─── Стікмен відео (edge-tts + Pillow + FFmpeg) ────────────────────────────
+
+async function makeStickmanVideo(jokeText) {
+  const workDir = `/tmp/stickman_${Date.now()}`;
+  fs.mkdirSync(workDir, { recursive: true });
+
+  const inputFile  = `${workDir}/input.json`;
+  const outputFile = `${workDir}/final.mp4`;
+
+  fs.writeFileSync(inputFile, JSON.stringify({ text: jokeText }));
+  console.log(`🎬 stickman.py: "${jokeText.substring(0, 60)}..."`);
+
+  execSync(`python3 /app/stickman.py --input "${inputFile}" --output "${outputFile}"`, {
+    stdio: 'pipe',
+    timeout: 240000,
+  });
+
+  return outputFile;
+}
+
 // ─── Завантажити файл за URL ───────────────────────────────────────────────
 
 function downloadFile(url, dest, timeoutMs = 60000) {
@@ -257,4 +277,4 @@ async function makeShortVideo(script) {
   }
 }
 
-module.exports = { makeShortVideo };
+module.exports = { makeShortVideo, makeStickmanVideo };
