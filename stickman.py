@@ -34,10 +34,9 @@ STICK_LINE = (25,  25,  25)
 BUBBLE_BG  = (255, 255, 255)
 BUBBLE_BD  = (30,  30,  30)
 TEXT_COL   = (20,  20,  20)
-SHIRT_COL  = (50,  110, 220)   # Синя сорочка
+SHIRT_COL  = (55,  115, 225)   # Синя куртка
 PANTS_COL  = (40,  40,  110)   # Темно-сині штани
-BELT_COL   = (70,  40,  15)    # Коричневий пояс
-BUCKLE_COL = (200, 160, 30)    # Золота пряжка
+TIE_COL    = (200, 20,  20)    # Червона краватка
 
 # Comic стиль — приплюснута голова (oval)
 CX         = W // 2
@@ -220,14 +219,22 @@ def draw_speech_bubble(draw, text, font):
 # ─── Стікмен ──────────────────────────────────────────────────────────────────
 
 def _thick_arm(draw, x1, y1, x2, y2, color, w):
-    """Малює товстий рукав як залитий полігон."""
     dx, dy = x2 - x1, y2 - y1
     length = math.hypot(dx, dy)
     if length == 0:
         return
     nx, ny = -dy / length * w / 2, dx / length * w / 2
     pts = [(x1+nx, y1+ny), (x1-nx, y1-ny), (x2-nx, y2-ny), (x2+nx, y2+ny)]
-    draw.polygon(pts, fill=color, outline=STICK_LINE, width=3)
+    draw.polygon(pts, fill=color, outline=color, width=1)
+
+
+def _smooth_limb(draw, points, color, w):
+    """Плавна кінцівка через список точок — сегменти + кружечки в суглобах."""
+    for i in range(len(points) - 1):
+        _thick_arm(draw, *points[i], *points[i+1], color, w)
+    r = w // 2 + 1
+    for x, y in points:
+        draw.ellipse([x-r, y-r, x+r, y+r], fill=color)
 
 
 def draw_stickman(draw, frame_idx, talking=True):
@@ -236,90 +243,85 @@ def draw_stickman(draw, frame_idx, talking=True):
     swing = math.sin(frame_idx * 0.12) * 20
     fs    = 12   # face_shift — 3/4 поворот голови вправо
 
-    arm_y  = NECK_Y + 30
-    hip_w  = SHIRT_W + 16
+    arm_y  = NECK_Y + 28
+    hip_w  = SHIRT_W + 14
 
-    # ── Сорочка (трапеція) ──
-    shirt_pts = [
-        (cx - SHIRT_W, NECK_Y + 6),
-        (cx + SHIRT_W, NECK_Y + 6),
-        (cx + hip_w,   HIP_Y),
-        (cx - hip_w,   HIP_Y),
-    ]
-    draw.polygon(shirt_pts, fill=SHIRT_COL, outline=STICK_LINE, width=LW)
-
-    # Комір — V-подібний
-    draw.polygon([
-        (cx - 22, NECK_Y + 6),
-        (cx + fs,  NECK_Y + 48),
-        (cx + 22, NECK_Y + 6),
-    ], fill=WHITE, outline=STICK_LINE, width=3)
-
-    # Кишенька на грудях
-    px, py = cx - SHIRT_W + 14, NECK_Y + 52
-    draw.rectangle([px, py, px + 22, py + 20], fill=SHIRT_COL, outline=STICK_LINE, width=3)
-
-    # ── Рукави з плавним ЛІКТЕМ ──
-    # Ліва рука — лікоть зміщений мінімально (плавний згин)
-    slx, sly = cx - SHIRT_W, arm_y
-    lx2 = int(cx - SHIRT_W - ARM_LEN)
-    ly2 = int(arm_y + 72 + swing)
-    elx = (slx + lx2) // 2 - 5
-    ely = (sly + ly2) // 2 + int(swing * 0.1)
-    _thick_arm(draw, slx, sly, elx, ely, SHIRT_COL, SLEEVE_W)
-    _thick_arm(draw, elx, ely, lx2, ly2, SHIRT_COL, SLEEVE_W)
-    # Закруглення в ліктьовому суглобі
-    draw.ellipse([elx - SLEEVE_W//2, ely - SLEEVE_W//2,
-                  elx + SLEEVE_W//2, ely + SLEEVE_W//2],
-                 fill=SHIRT_COL, outline=STICK_LINE, width=2)
+    # ── Чорні плавні РУКИ (3 точки = плавний згин) ──
+    # Ліва рука: плече → лікоть → кисть
+    lx_sh, ly_sh = cx - SHIRT_W - 2, arm_y
+    lx_el = int(cx - SHIRT_W - ARM_LEN * 0.45) - 8
+    ly_el = int(arm_y + ARM_LEN * 0.35 + swing * 0.5)
+    lx_h  = int(cx - SHIRT_W - ARM_LEN)
+    ly_h  = int(arm_y + 68 + swing)
+    _smooth_limb(draw, [(lx_sh, ly_sh), (lx_el, ly_el), (lx_h, ly_h)],
+                 STICK_LINE, SLEEVE_W)
 
     # Права рука
-    srx, sry = cx + SHIRT_W, arm_y
-    rx2 = int(cx + SHIRT_W + ARM_LEN)
-    ry2 = int(arm_y + 72 - swing)
-    erx = (srx + rx2) // 2 + 5
-    ery = (sry + ry2) // 2 - int(swing * 0.1)
-    _thick_arm(draw, srx, sry, erx, ery, SHIRT_COL, SLEEVE_W)
-    _thick_arm(draw, erx, ery, rx2, ry2, SHIRT_COL, SLEEVE_W)
-    draw.ellipse([erx - SLEEVE_W//2, ery - SLEEVE_W//2,
-                  erx + SLEEVE_W//2, ery + SLEEVE_W//2],
-                 fill=SHIRT_COL, outline=STICK_LINE, width=2)
+    rx_sh, ry_sh = cx + SHIRT_W + 2, arm_y
+    rx_el = int(cx + SHIRT_W + ARM_LEN * 0.45) + 8
+    ry_el = int(arm_y + ARM_LEN * 0.35 - swing * 0.5)
+    rx_h  = int(cx + SHIRT_W + ARM_LEN)
+    ry_h  = int(arm_y + 68 - swing)
+    _smooth_limb(draw, [(rx_sh, ry_sh), (rx_el, ry_el), (rx_h, ry_h)],
+                 STICK_LINE, SLEEVE_W)
 
-    # Кулаки
-    draw.ellipse([lx2-9, ly2-9, lx2+9, ly2+9], fill=WHITE, outline=STICK_LINE, width=3)
-    draw.ellipse([rx2-9, ry2-9, rx2+9, ry2+9], fill=WHITE, outline=STICK_LINE, width=3)
+    # ── Куртка з закругленими кутами ──
+    # Білий комір/сорочка по центру
+    draw.rounded_rectangle([cx - 18, NECK_Y + 2, cx + 18, HIP_Y + 4],
+                            radius=8, fill=WHITE)
+    # Ліва половина куртки
+    draw.rounded_rectangle([cx - hip_w, NECK_Y + 4, cx + 6, HIP_Y + 8],
+                            radius=20, fill=SHIRT_COL, outline=STICK_LINE, width=3)
+    # Права половина куртки
+    draw.rounded_rectangle([cx - 6, NECK_Y + 4, cx + hip_w, HIP_Y + 8],
+                            radius=20, fill=SHIRT_COL, outline=STICK_LINE, width=3)
+    # Центральна лінія куртки
+    draw.line([(cx, NECK_Y + 4), (cx, HIP_Y + 8)], fill=STICK_LINE, width=3)
 
-    # ── Пояс ──
-    draw.rectangle([cx - hip_w, HIP_Y,      cx + hip_w, HIP_Y + 18],
-                   fill=BELT_COL, outline=STICK_LINE, width=3)
-    draw.rectangle([cx - 11,    HIP_Y - 2,  cx + 11,    HIP_Y + 20],
-                   fill=BUCKLE_COL, outline=STICK_LINE, width=2)
+    # Лацкани (відвороти комірця)
+    draw.polygon([(cx - 18, NECK_Y + 2), (cx - 28, NECK_Y + 35), (cx, NECK_Y + 55)],
+                 fill=WHITE, outline=STICK_LINE, width=2)
+    draw.polygon([(cx + 18, NECK_Y + 2), (cx + 28, NECK_Y + 35), (cx, NECK_Y + 55)],
+                 fill=WHITE, outline=STICK_LINE, width=2)
 
-    # ── Штани (дві ноги) ──
-    mid_hip = HIP_Y + 20
-    leg_end  = mid_hip + 88
-    draw.rectangle([cx - hip_w, mid_hip, cx - 5,    leg_end],
-                   fill=PANTS_COL, outline=STICK_LINE, width=LW)
-    draw.rectangle([cx + 5,     mid_hip, cx + hip_w, leg_end],
-                   fill=PANTS_COL, outline=STICK_LINE, width=LW)
+    # Краватка
+    draw.polygon([
+        (cx - 7,  NECK_Y + 52),
+        (cx + 7,  NECK_Y + 52),
+        (cx + 10, NECK_Y + 95),
+        (cx,      NECK_Y + 115),
+        (cx - 10, NECK_Y + 95),
+    ], fill=TIE_COL, outline=STICK_LINE, width=2)
 
-    # Гомілки — товсті полігони (однакові з руками)
-    _thick_arm(draw, cx - hip_w // 2, leg_end, cx - 50, GROUND_Y, PANTS_COL, LEG_W)
-    _thick_arm(draw, cx + hip_w // 2, leg_end, cx + 50, GROUND_Y, PANTS_COL, LEG_W)
+    # ── Штани з закругленим верхом ──
+    mid_hip = HIP_Y + 10
+    leg_end  = mid_hip + 90
+    draw.rounded_rectangle([cx - hip_w, mid_hip - 2, cx - 4, leg_end],
+                            radius=12, fill=PANTS_COL, outline=STICK_LINE, width=LW)
+    draw.rounded_rectangle([cx + 4, mid_hip - 2, cx + hip_w, leg_end],
+                            radius=12, fill=PANTS_COL, outline=STICK_LINE, width=LW)
+
+    # Гомілки — чорні плавні
+    _smooth_limb(draw, [(cx - hip_w//2, leg_end), (cx - 48, GROUND_Y)],
+                 STICK_LINE, LEG_W)
+    _smooth_limb(draw, [(cx + hip_w//2, leg_end), (cx + 48, GROUND_Y)],
+                 STICK_LINE, LEG_W)
     # Черевики
-    draw.ellipse([cx-62, GROUND_Y-8, cx-28, GROUND_Y+10], fill=STICK_LINE)
-    draw.ellipse([cx+28, GROUND_Y-8, cx+62, GROUND_Y+10], fill=STICK_LINE)
+    draw.rounded_rectangle([cx - 65, GROUND_Y - 6, cx - 24, GROUND_Y + 12],
+                            radius=6, fill=STICK_LINE)
+    draw.rounded_rectangle([cx + 24, GROUND_Y - 6, cx + 65, GROUND_Y + 12],
+                            radius=6, fill=STICK_LINE)
 
     # ── Приплюснута овальна голова ──
     draw.ellipse([cx - HEAD_RX, HEAD_CY - HEAD_RY,
                   cx + HEAD_RX, HEAD_CY + HEAD_RY],
                  fill=WHITE, outline=STICK_LINE, width=LW)
 
-    # ── Легка тінь по лівому краю (вузька смужка) ──
-    draw.ellipse([cx - HEAD_RX + 4,  HEAD_CY - HEAD_RY + 8,
-                  cx - HEAD_RX + 38, HEAD_CY + HEAD_RY - 8],
-                 fill=(220, 220, 225))
-    # Перемалювати контур поверх тіні
+    # ── Тінь всередині голови (не виходить за межі) ──
+    # Малюємо невеликий сірий еліпс строго всередині голови
+    draw.ellipse([cx - HEAD_RX + 8,  HEAD_CY - HEAD_RY + 14,
+                  cx - HEAD_RX + 42, HEAD_CY + HEAD_RY - 14],
+                 fill=(218, 218, 224))
     draw.ellipse([cx - HEAD_RX, HEAD_CY - HEAD_RY,
                   cx + HEAD_RX, HEAD_CY + HEAD_RY],
                  outline=STICK_LINE, width=LW)
