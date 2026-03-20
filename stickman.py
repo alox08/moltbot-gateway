@@ -293,35 +293,35 @@ def draw_stickman(draw, frame_idx, talking=True):
         (cx - 10, NECK_Y + 95),
     ], fill=TIE_COL, outline=STICK_LINE, width=2)
 
-    # ── Штани з закругленим верхом ──
-    mid_hip = HIP_Y + 10
-    leg_end  = mid_hip + 90
-    draw.rounded_rectangle([cx - hip_w, mid_hip - 2, cx - 4, leg_end],
-                            radius=12, fill=PANTS_COL, outline=STICK_LINE, width=LW)
-    draw.rounded_rectangle([cx + 4, mid_hip - 2, cx + hip_w, leg_end],
-                            radius=12, fill=PANTS_COL, outline=STICK_LINE, width=LW)
-
-    # Гомілки — чорні плавні
-    _smooth_limb(draw, [(cx - hip_w//2, leg_end), (cx - 48, GROUND_Y)],
+    # ── Ноги прямо з тулуба (без розриву) ──
+    leg_end = HIP_Y + 100
+    # Ліва нога — починається з нижнього краю куртки
+    _smooth_limb(draw, [(cx - hip_w // 2, HIP_Y + 8), (cx - 44, leg_end)],
                  STICK_LINE, LEG_W)
-    _smooth_limb(draw, [(cx + hip_w//2, leg_end), (cx + 48, GROUND_Y)],
+    # Права нога
+    _smooth_limb(draw, [(cx + hip_w // 2, HIP_Y + 8), (cx + 44, leg_end)],
+                 STICK_LINE, LEG_W)
+    # Гомілки
+    _smooth_limb(draw, [(cx - 44, leg_end), (cx - 44, GROUND_Y)],
+                 STICK_LINE, LEG_W)
+    _smooth_limb(draw, [(cx + 44, leg_end), (cx + 44, GROUND_Y)],
                  STICK_LINE, LEG_W)
     # Черевики
-    draw.rounded_rectangle([cx - 65, GROUND_Y - 6, cx - 24, GROUND_Y + 12],
-                            radius=6, fill=STICK_LINE)
-    draw.rounded_rectangle([cx + 24, GROUND_Y - 6, cx + 65, GROUND_Y + 12],
-                            radius=6, fill=STICK_LINE)
+    draw.rounded_rectangle([cx - 62, GROUND_Y - 6, cx - 22, GROUND_Y + 14],
+                            radius=7, fill=STICK_LINE)
+    draw.rounded_rectangle([cx + 22, GROUND_Y - 6, cx + 62, GROUND_Y + 14],
+                            radius=7, fill=STICK_LINE)
 
-    # ── Приплюснута овальна голова ──
+    # ── Голова з тінню (серп зліва) ──
+    # 1) Заливка сірим (колір тіні)
     draw.ellipse([cx - HEAD_RX, HEAD_CY - HEAD_RY,
                   cx + HEAD_RX, HEAD_CY + HEAD_RY],
-                 fill=WHITE, outline=STICK_LINE, width=LW)
-
-    # ── Тінь всередині голови (не виходить за межі) ──
-    # Малюємо невеликий сірий еліпс строго всередині голови
-    draw.ellipse([cx - HEAD_RX + 8,  HEAD_CY - HEAD_RY + 14,
-                  cx - HEAD_RX + 42, HEAD_CY + HEAD_RY - 14],
-                 fill=(218, 218, 224))
+                 fill=(195, 200, 210), outline=STICK_LINE, width=LW)
+    # 2) Білий овал зміщений вправо — оголяє сірий серп зліва
+    draw.ellipse([cx - HEAD_RX + 24, HEAD_CY - HEAD_RY + 5,
+                  cx + HEAD_RX + 4,  HEAD_CY + HEAD_RY - 5],
+                 fill=WHITE)
+    # 3) Контур поверх
     draw.ellipse([cx - HEAD_RX, HEAD_CY - HEAD_RY,
                   cx + HEAD_RX, HEAD_CY + HEAD_RY],
                  outline=STICK_LINE, width=LW)
