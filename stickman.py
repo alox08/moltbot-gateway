@@ -1,17 +1,11 @@
 #!/usr/bin/env python3
 """
-Stickman video generator for MoltBot
+Stickman video generator v2 — colorful background + speech bubble
 Usage: python3 stickman.py --input /tmp/input.json --output /tmp/output.mp4
 Input JSON: {"text": "Ukrainian text here"}
 """
 
-import sys
-import json
-import math
-import subprocess
-import argparse
-import asyncio
-import os
+import sys, json, math, subprocess, argparse, asyncio, os
 
 try:
     from PIL import Image, ImageDraw, ImageFont
@@ -25,81 +19,91 @@ except ImportError:
     print("ERROR: edge-tts not installed", file=sys.stderr)
     sys.exit(1)
 
-# ─── Налаштування кадру ───────────────────────────────────────────────────────
+# ─── Налаштування ─────────────────────────────────────────────────────────────
 
-W, H   = 480, 854
-FPS    = 25
-VOICE  = "uk-UA-OstapNeural"
+W, H  = 480, 854
+FPS   = 25
+VOICE = "uk-UA-OstapNeural"
 
-# Кольори
-BG_SKY    = (15, 25, 50)
-BG_GROUND = (30, 50, 30)
-STICK_COL = (255, 220, 100)
-WHITE     = (255, 255, 255)
-BLACK     = (0, 0, 0)
+# Кольори фону
+SKY_COL    = (135, 206, 235)
+GROUND_COL = (60, 140, 60)
+GROUND_LN  = (40, 100, 40)
+SUN_COL    = (255, 215, 0)
+WHITE      = (255, 255, 255)
 
-# Позиції стікмена
+# Стікмен
+STICK_FILL = (255, 220, 150)   # колір шкіри
+STICK_LINE = (35,  35,  35)    # контур
+
+# Хмаринка
+BUBBLE_BG  = (255, 255, 255)
+BUBBLE_BD  = (30,  30,  30)
+TEXT_COL   = (20,  20,  20)
+
+# Позиції стікмена (більший, нижче центру)
 CX         = W // 2
-GROUND_Y   = H - 110
-HEAD_R     = 40
-HEAD_CY    = GROUND_Y - 290
+GROUND_Y   = H - 90
+HEAD_R     = 56
+HEAD_CY    = GROUND_Y - 355
 NECK_Y     = HEAD_CY + HEAD_R + 4
-BODY_LEN   = 125
+BODY_LEN   = 155
 HIP_Y      = NECK_Y + BODY_LEN
-SHOULDER_Y = NECK_Y + 18
-ARM_LEN    = 78
-LW         = 5   # товщина ліній
+SHOULDER_Y = NECK_Y + 22
+ARM_LEN    = 95
+LW         = 7
 
-# ─── Малювання ────────────────────────────────────────────────────────────────
+# ─── Шрифти ───────────────────────────────────────────────────────────────────
 
-def draw_background(draw):
-    draw.rectangle([(0, 0),        (W, GROUND_Y)], fill=BG_SKY)
-    draw.rectangle([(0, GROUND_Y), (W, H)],        fill=BG_GROUND)
-    draw.line([(0, GROUND_Y), (W, GROUND_Y)], fill=(60, 100, 60), width=3)
+def load_font(size):
+    for path in [
+        '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
+        '/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf',
+    ]:
+        try:
+            return ImageFont.truetype(path, size)
+        except Exception:
+            pass
+    return ImageFont.load_default()
 
+# ─── Фон ──────────────────────────────────────────────────────────────────────
 
-def draw_stickman(draw, frame_idx, talking=True):
-    sway = int(math.sin(frame_idx * 0.04) * 2)
-    cx = CX + sway
+def draw_cloud(draw, cx, cy, r):
+    draw.ellipse([cx - r,      cy - r // 2,     cx + r,      cy + r // 2],     fill=WHITE)
+    draw.ellipse([cx - r // 2, cy - r * 3 // 4, cx + r // 2, cy + r // 4],     fill=WHITE)
+    draw.ellipse([cx + r // 3, cy - r * 2 // 3, cx + r + 10, cy + r // 4 - 5], fill=WHITE)
 
-    # Тіло
-    draw.line([(cx, NECK_Y), (cx, HIP_Y)], fill=STICK_COL, width=LW)
+def draw_background(draw, frame_idx):
+    # Небо
+    draw.rectangle([(0, 0), (W, GROUND_Y)], fill=SKY_COL)
+    # Земля
+    draw.rectangle([(0, GROUND_Y), (W, H)], fill=GROUND_COL)
+    draw.line([(0, GROUND_Y), (W, GROUND_Y)], fill=GROUND_LN, width=4)
+    # Сонце
+    draw.ellipse([W - 95, 18, W - 18, 95], fill=SUN_COL)
+    # Промені сонця (обертаються)
+    sun_cx, sun_cy = W - 56, 56
+    angle_offset = frame_idx * 0.6
+    for i in range(8):
+        angle = math.radians(i * 45 + angle_offset)
+        x1 = sun_cx + math.cos(angle) * 42
+        y1 = sun_cy + math.sin(angle) * 42
+        x2 = sun_cx + math.cos(angle) * 58
+        y2 = sun_cy + math.sin(angle) * 58
+        draw.line([(x1, y1), (x2, y2)], fill=(255, 200, 0), width=3)
+    # Хмари (рухаються вліво)
+    offset = int(frame_idx * 0.35) % (W + 160)
+    draw_cloud(draw, 260 - offset,        80, 52)
+    draw_cloud(draw, 70 + W // 2 - offset, 135, 36)
 
-    # Руки — хитаються
-    swing = math.sin(frame_idx * 0.12) * 18
-    draw.line([(cx, SHOULDER_Y), (cx - ARM_LEN, SHOULDER_Y + 55 + int(swing))],  fill=STICK_COL, width=LW)
-    draw.line([(cx, SHOULDER_Y), (cx + ARM_LEN, SHOULDER_Y + 55 - int(swing))],  fill=STICK_COL, width=LW)
+# ─── Хмаринка діалогу ─────────────────────────────────────────────────────────
 
-    # Ноги
-    draw.line([(cx, HIP_Y), (cx - 48, GROUND_Y)], fill=STICK_COL, width=LW)
-    draw.line([(cx, HIP_Y), (cx + 48, GROUND_Y)], fill=STICK_COL, width=LW)
-
-    # Голова
-    draw.ellipse(
-        [cx - HEAD_R, HEAD_CY - HEAD_R, cx + HEAD_R, HEAD_CY + HEAD_R],
-        outline=STICK_COL, width=LW
-    )
-
-    # Очі
-    ey = HEAD_CY - 10
-    draw.ellipse([cx - 17, ey - 6, cx - 5,  ey + 6], fill=STICK_COL)
-    draw.ellipse([cx +  5, ey - 6, cx + 17, ey + 6], fill=STICK_COL)
-
-    # Рот — відкритий/закритий (мова)
-    my = HEAD_CY + 14
-    if talking and (frame_idx // 4) % 2 == 0:
-        draw.ellipse([cx - 13, my - 7, cx + 13, my + 9], fill=(180, 40, 40))
-    else:
-        draw.arc([cx - 13, my - 4, cx + 13, my + 10], 0, 180, fill=STICK_COL, width=3)
-
-
-def draw_subtitle(draw, text, font):
-    # Розбити текст на рядки (~22 символи)
+def wrap_text(text, max_chars=19):
     words = text.split()
     lines, line = [], ''
     for w in words:
         test = (line + ' ' + w).strip()
-        if len(test) > 22:
+        if len(test) > max_chars:
             if line:
                 lines.append(line.strip())
             line = w
@@ -107,26 +111,92 @@ def draw_subtitle(draw, text, font):
             line = test
     if line:
         lines.append(line.strip())
-    lines = lines[:3]
+    return lines[:4]
 
-    start_y = H - 75 - len(lines) * 45
-    for l in lines:
-        bbox = draw.textbbox((CX, start_y), l, font=font, anchor='mt')
-        pad = 10
-        # Чорний фон під текстом
-        draw.rectangle([bbox[0]-pad, bbox[1]-4, bbox[2]+pad, bbox[3]+4], fill=BLACK)
-        # Тінь + текст
-        draw.text((CX+2, start_y+2), l, font=font, fill=(60, 60, 60), anchor='mt')
-        draw.text((CX,   start_y),   l, font=font, fill=WHITE,        anchor='mt')
-        start_y += 45
+def draw_speech_bubble(draw, text, font):
+    lines = wrap_text(text)
+    if not lines:
+        return
 
+    line_h  = 44
+    pad     = 20
+    bx1     = 28
+    bx2     = W - 28
+    by1     = 38
+    by2     = by1 + len(lines) * line_h + pad * 2
 
-# ─── Генерація аудіо ──────────────────────────────────────────────────────────
+    # Тінь хмаринки
+    draw.rounded_rectangle([bx1 + 4, by1 + 4, bx2 + 4, by2 + 4],
+                            radius=22, fill=(180, 180, 180))
+    # Хмаринка
+    draw.rounded_rectangle([bx1, by1, bx2, by2],
+                            radius=22, fill=BUBBLE_BG, outline=BUBBLE_BD, width=3)
+
+    # Хвіст (трикутник до голови)
+    tail_tip_y  = HEAD_CY - HEAD_R - 4
+    tail_base_y = by2
+    draw.polygon([(CX - 16, tail_base_y), (CX + 16, tail_base_y), (CX, tail_tip_y)],
+                 fill=BUBBLE_BG)
+    draw.line([(CX - 16, tail_base_y), (CX, tail_tip_y)], fill=BUBBLE_BD, width=3)
+    draw.line([(CX + 16, tail_base_y), (CX, tail_tip_y)], fill=BUBBLE_BD, width=3)
+
+    # Текст
+    ty = by1 + pad
+    for line in lines:
+        draw.text((CX, ty), line, font=font, fill=TEXT_COL, anchor='mt')
+        ty += line_h
+
+# ─── Стікмен ──────────────────────────────────────────────────────────────────
+
+def draw_stickman(draw, frame_idx, talking=True):
+    sway  = int(math.sin(frame_idx * 0.04) * 2)
+    cx    = CX + sway
+    swing = math.sin(frame_idx * 0.12) * 20
+
+    # Тіло
+    draw.line([(cx, NECK_Y), (cx, HIP_Y)], fill=STICK_LINE, width=LW)
+
+    # Руки
+    draw.line([(cx, SHOULDER_Y), (cx - ARM_LEN, SHOULDER_Y + 65 + int(swing))],
+              fill=STICK_LINE, width=LW)
+    draw.line([(cx, SHOULDER_Y), (cx + ARM_LEN, SHOULDER_Y + 65 - int(swing))],
+              fill=STICK_LINE, width=LW)
+
+    # Ноги
+    draw.line([(cx, HIP_Y), (cx - 58, GROUND_Y)], fill=STICK_LINE, width=LW)
+    draw.line([(cx, HIP_Y), (cx + 58, GROUND_Y)], fill=STICK_LINE, width=LW)
+
+    # Голова (з заливкою)
+    draw.ellipse([cx - HEAD_R, HEAD_CY - HEAD_R, cx + HEAD_R, HEAD_CY + HEAD_R],
+                 fill=STICK_FILL, outline=STICK_LINE, width=LW)
+
+    # Очі
+    ey = HEAD_CY - 13
+    draw.ellipse([cx - 22, ey - 8, cx - 6,  ey + 8], fill=STICK_LINE)
+    draw.ellipse([cx +  6, ey - 8, cx + 22, ey + 8], fill=STICK_LINE)
+    # Блиск в очах
+    draw.ellipse([cx - 19, ey - 6, cx - 13, ey - 1], fill=WHITE)
+    draw.ellipse([cx +  9, ey - 6, cx + 15, ey - 1], fill=WHITE)
+
+    # Брови (виразні)
+    draw.line([(cx - 24, ey - 16), (cx - 4,  ey - 11)], fill=STICK_LINE, width=4)
+    draw.line([(cx +  4, ey - 11), (cx + 24, ey - 16)], fill=STICK_LINE, width=4)
+
+    # Рот
+    my = HEAD_CY + 18
+    if talking and (frame_idx // 4) % 2 == 0:
+        # Відкритий — говорить
+        draw.ellipse([cx - 17, my - 9, cx + 17, my + 11], fill=(200, 50, 50))
+        draw.line([(cx - 9, my + 1), (cx + 9, my + 1)], fill=WHITE, width=4)
+    else:
+        # Закритий — усміхається
+        draw.arc([cx - 16, my - 5, cx + 16, my + 13], 0, 180, fill=STICK_LINE, width=4)
+
+# ─── Аудіо ────────────────────────────────────────────────────────────────────
 
 async def generate_audio(text, audio_path):
     communicate = edge_tts.Communicate(text, VOICE)
     await communicate.save(audio_path)
-
 
 def get_audio_duration(audio_path):
     result = subprocess.run(
@@ -139,51 +209,41 @@ def get_audio_duration(audio_path):
             return float(stream['duration'])
     return 10.0
 
-
-# ─── Генерація кадрів → FFmpeg ────────────────────────────────────────────────
+# ─── Генерація відео ──────────────────────────────────────────────────────────
 
 def generate_silent_video(text, duration, silent_path):
     total_frames = int(duration * FPS)
-
-    font_path = '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'
-    try:
-        font = ImageFont.truetype(font_path, 34)
-    except Exception:
-        font = ImageFont.load_default()
+    font = load_font(32)
 
     cmd = [
         'ffmpeg', '-y', '-loglevel', 'error',
         '-f', 'rawvideo', '-vcodec', 'rawvideo',
-        '-s', f'{W}x{H}',
-        '-pix_fmt', 'rgb24',
-        '-r', str(FPS),
-        '-i', 'pipe:0',
+        '-s', f'{W}x{H}', '-pix_fmt', 'rgb24',
+        '-r', str(FPS), '-i', 'pipe:0',
         '-c:v', 'libx264', '-preset', 'ultrafast',
-        '-crf', '28', '-pix_fmt', 'yuv420p',
-        '-threads', '1',
-        silent_path
+        '-crf', '26', '-pix_fmt', 'yuv420p',
+        '-threads', '1', silent_path
     ]
 
     proc = subprocess.Popen(cmd, stdin=subprocess.PIPE)
     try:
         for i in range(total_frames):
-            img  = Image.new('RGB', (W, H), BG_SKY)
+            img  = Image.new('RGB', (W, H), SKY_COL)
             draw = ImageDraw.Draw(img)
-            draw_background(draw)
+            draw_background(draw, i)
             draw_stickman(draw, i, talking=True)
-            draw_subtitle(draw, text, font)
+            draw_speech_bubble(draw, text, font)
             proc.stdin.write(img.tobytes())
     finally:
         proc.stdin.close()
         proc.wait()
 
-
 # ─── Головна функція ──────────────────────────────────────────────────────────
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--input',  required=True, help='JSON file with {"text": "..."}')
-    parser.add_argument('--output', required=True, help='Output MP4 path')
+    parser.add_argument('--input',  required=True)
+    parser.add_argument('--output', required=True)
     args = parser.parse_args()
 
     with open(args.input) as f:
@@ -206,15 +266,12 @@ def main():
     print('🎞 Склеюю відео + аудіо...', flush=True)
     subprocess.run([
         'ffmpeg', '-y', '-loglevel', 'error',
-        '-i', silent_path,
-        '-i', audio_path,
-        '-c:v', 'copy', '-c:a', 'aac',
-        '-shortest',
+        '-i', silent_path, '-i', audio_path,
+        '-c:v', 'copy', '-c:a', 'aac', '-shortest',
         args.output
     ], check=True)
 
     print(f'✅ Готово: {args.output}', flush=True)
-
 
 if __name__ == '__main__':
     main()
