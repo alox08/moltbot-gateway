@@ -177,10 +177,12 @@ const MODELS = [
 ];
 
 // Розумні моделі — для субагентів (/shorts, /story, /stickman)
-// Phi-4 думає довше але видає кращий результат
 const MODELS_SMART = [
   'microsoft/phi-4-reasoning-plus:free',
-  'meta-llama/llama-3.3-70b-instruct:free',  // fallback якщо phi-4 недоступна
+  'deepseek/deepseek-chat-v3-0324:free',
+  'meta-llama/llama-3.3-70b-instruct:free',
+  'google/gemma-3-27b-it:free',
+  'mistralai/mistral-7b-instruct:free',
 ];
 
 let lastUsedModel = MODELS[0];
@@ -199,12 +201,14 @@ async function callLLMWithList(models, messages, maxTokens = 2000) {
         body: JSON.stringify({ model, messages, max_tokens: maxTokens }),
       });
       const data = await res.json();
-      if (data.choices?.[0]?.message?.content) {
+      const raw = data.choices?.[0]?.message?.content?.trim();
+      const content = raw ? raw.replace(/<think>[\s\S]*?<\/think>/g, '').trim() : '';
+      if (content) {
         console.log(`✅ Модель: ${model}`);
         lastUsedModel = model;
-        return data.choices[0].message.content.trim();
+        return content;
       }
-      console.warn(`⚠️ ${model} не відповів`);
+      console.warn(`⚠️ ${model} — порожня відповідь`);
     } catch (e) {
       console.warn(`⚠️ ${model} помилка: ${e.message}`);
     }
@@ -241,13 +245,15 @@ const SMART_AGENTS = ['shorts', 'story', 'joke'];
 async function callAgent(agentType, task, memoryBlock = '') {
   const systemPrompt = (AGENT_PROMPTS[agentType] || AGENT_PROMPTS.main) + memoryBlock;
   const useSmart = SMART_AGENTS.includes(agentType);
-  console.log(`🤖 Субагент [${agentType}] (${useSmart ? 'phi-4' : 'fast'}): "${task.substring(0, 60)}"`);
+  console.log(`🤖 Субагент [${agentType}] (${useSmart ? 'smart' : 'fast'}): "${task.substring(0, 60)}"`);
   const llm = useSmart ? callLLMSmart : callLLM;
   const reply = await llm([
     { role: 'system', content: systemPrompt },
     { role: 'user', content: task },
   ]);
-  return reply ? cleanReply(reply) : null;
+  if (!reply) return null;
+  const cleaned = cleanReply(reply);
+  return cleaned || null;  // якщо phi-4 повернула тільки <think> без відповіді — null
 }
 
 // ─── Оркестратор ───────────────────────────────────────────────────────────
