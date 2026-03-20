@@ -83,6 +83,18 @@ async def generate_audio_with_timings(text, audio_path):
     return timings
 
 
+def make_fallback_timings(text, duration):
+    """Якщо edge-tts не дав WordBoundary — розподіляємо слова рівномірно."""
+    words = text.split()
+    if not words:
+        return []
+    time_per_word = duration / len(words)
+    return [
+        {'word': w, 'start': i * time_per_word, 'end': (i + 1) * time_per_word}
+        for i, w in enumerate(words)
+    ]
+
+
 def get_audio_duration(audio_path):
     result = subprocess.run(
         ['ffprobe', '-v', 'quiet', '-print_format', 'json', '-show_streams', audio_path],
@@ -290,6 +302,10 @@ def main():
     print(f'📝 Отримано таймінгів слів: {len(timings)}', flush=True)
 
     duration = get_audio_duration(audio_path) + 0.8
+
+    if not timings:
+        print('⚠️ WordBoundary не отримано — використовую рівномірний розподіл', flush=True)
+        timings = make_fallback_timings(text, duration - 0.8)
     print(f'⏱ Тривалість: {duration:.1f}с ({int(duration * FPS)} кадрів)', flush=True)
 
     print('🎨 Малюю стікмена з karaoke...', flush=True)
