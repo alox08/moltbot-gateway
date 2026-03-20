@@ -1,6 +1,6 @@
 const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, AttachmentBuilder } = require('discord.js');
 const { QdrantClient } = require('@qdrant/js-client-rest');
-const { makeShortVideo, makeStickmanVideo } = require('./videomaker');
+const { makeShortVideo, makeStickmanVideo, makeComicVideo } = require('./videomaker');
 const fs = require('fs');
 
 // ─── Архіваріус ────────────────────────────────────────────────────────────
@@ -164,6 +164,19 @@ const SYSTEM_STORY = `Ти StoryManager 📖 — субагент МолтБот
 
 Якщо в секції [ПАМ'ЯТЬ] є схожі минулі оповідання — врахуй стиль.`;
 
+const SYSTEM_COMIC = `Ти сценарист анімованих коміксів для YouTube Shorts.
+Відповідай ТІЛЬКИ валідним JSON. Нічого крім JSON — без пояснень, без тексту до чи після.
+
+Формат відповіді:
+{"scenes":[{"background":"вулиця","left":"репліка лівого","right":"репліка правого"},{"background":"офіс","left":"...","right":"..."}]}
+
+Доступні фони: вулиця, офіс, ніч, магазин, кухня
+Правила:
+- 3-4 сцени
+- Кожна репліка максимум 10 слів, тільки українська
+- Фінальна репліка — несподіваний або смішний поворот
+- Лівий персонаж завжди починає розмову`;
+
 // ─── LLM виклик з автоперемиканням ────────────────────────────────────────
 
 // Швидкі моделі — для чату та оркестратора
@@ -240,6 +253,7 @@ const AGENT_PROMPTS = {
   shorts: SYSTEM_SHORTS,
   story:  SYSTEM_STORY,
   joke:   SYSTEM_JOKE,
+  comic:  SYSTEM_COMIC,
 };
 
 // Субагенти що потребують якості — використовують phi-4
@@ -324,12 +338,16 @@ async function registerCommands() {
       .setName('stickman')
       .setDescription('Стікмен відео: AI генерує жарт + озвучка + анімація')
       .addStringOption(o => o.setName('тема').setDescription('Тема жарту').setRequired(true)),
+    new SlashCommandBuilder()
+      .setName('comic')
+      .setDescription('Анімований комікс: 2 персонажі + діалог + декорації + озвучка')
+      .addStringOption(o => o.setName('тема').setDescription('Тема коміксу').setRequired(true)),
   ].map(c => c.toJSON());
 
   const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
   try {
     await rest.put(Routes.applicationCommands(bot.user.id), { body: commands });
-    console.log('✅ Slash команди зареєстровано: /shorts /story /makevideo /stickman');
+    console.log('✅ Slash команди зареєстровано: /shorts /story /makevideo /stickman /comic');
   } catch (e) {
     console.error('Помилка реєстрації команд:', e.message);
   }
@@ -434,6 +452,41 @@ bot.on('interactionCreate', async (interaction) => {
       await interaction.followUp(`⚠️ Помилка: ${e.message}`);
     }
     archiveSave(interaction.user.id, tema, cleanJoke, 'stickman');
+
+  } else if (cmd === 'comic') {
+    // ── Comic: AI сценарій → два стікмени + декорації + озвучка → MP4 ──
+    console.log(`🎭 /comic: "${tema}"`);
+    await interaction.editReply('📝 Генерую сценарій коміксу...');
+
+    const raw = await callAgent('comic', tema);
+    if (!raw) { await interaction.editReply('⚠️ Не вдалось згенерувати сценарій.'); return; }
+
+    // Витягуємо JSON (на випадок якщо модель додала зайвий текст)
+    const jsonMatch = raw.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) { await interaction.editReply(`⚠️ Некоректний формат сценарію:\n\`\`\`${raw.substring(0,300)}\`\`\``); return; }
+
+    let parsed;
+    try {
+      parsed = JSON.parse(jsonMatch[0]);
+    } catch (e) {
+      await interaction.editReply(`⚠️ Не вдалось розпарсити JSON: ${e.message}`);
+      return;
+    }
+
+    const scenes = parsed.scenes || [];
+    const preview = scenes.map((s,i) => `**${i+1}. ${s.background}**\n🔵 ${s.left}\n🔴 ${s.right}`).join('\n\n');
+    await interaction.editReply(`📝 Сценарій:\n\n${preview}\n\n🎙 Озвучую + малюю...`);
+
+    try {
+      const videoFile = await makeComicVideo(JSON.stringify(parsed));
+      const attachment = new AttachmentBuilder(videoFile, { name: 'comic.mp4' });
+      await interaction.followUp({ content: '✅ Комікс готовий! 🎭', files: [attachment] });
+      fs.unlinkSync(videoFile);
+    } catch (e) {
+      console.error('comic помилка:', e.message);
+      await interaction.followUp(`⚠️ Помилка: ${e.message}`);
+    }
+    archiveSave(interaction.user.id, tema, JSON.stringify(parsed), 'comic');
   }
 });
 

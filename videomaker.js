@@ -277,4 +277,24 @@ async function makeShortVideo(script) {
   }
 }
 
-module.exports = { makeShortVideo, makeStickmanVideo };
+// ─── Comic відео (два персонажі + декорації) ──────────────────────────────
+
+async function makeComicVideo(scenesJson) {
+  const workDir = `/tmp/comic_${Date.now()}`;
+  fs.mkdirSync(workDir, { recursive: true });
+
+  const inputFile  = `${workDir}/input.json`;
+  const outputFile = `${workDir}/comic.mp4`;
+
+  fs.writeFileSync(inputFile, scenesJson);
+  console.log(`🎭 comic.py: ${JSON.parse(scenesJson).scenes.length} сцен`);
+
+  execSync(`python3 /app/comic.py --input "${inputFile}" --output "${outputFile}"`, {
+    stdio: 'pipe',
+    timeout: 600000,
+  });
+
+  return outputFile;
+}
+
+module.exports = { makeShortVideo, makeStickmanVideo, makeComicVideo };
