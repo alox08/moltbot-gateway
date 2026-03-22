@@ -520,18 +520,25 @@ bot.on('interactionCreate', async (interaction) => {
     console.log(`🎬 /cartoon: "${tema}"`);
     await interaction.editReply('📝 Генерую сценарій мультика...');
 
-    const raw = await callAgent('cartoon', tema);
-    if (!raw) { await interaction.editReply('⚠️ Не вдалось згенерувати сценарій.'); return; }
-
-    const jsonMatch = raw.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) { await interaction.editReply(`⚠️ Некоректний формат:\n\`\`\`${raw.substring(0,300)}\`\`\``); return; }
+    // Готовий сюжет від МолтБота (без LLM) — /cartoon моя
+    const DEMO_STORY = {"scenes":[{"background":"вулиця","enter":[{"char":0,"from":"left"}],"exit":[],"dialogs":[{"char":0,"text":"Нарешті понеділок! Обожнюю роботу!"}]},{"background":"вулиця","enter":[{"char":1,"from":"right"}],"exit":[],"dialogs":[{"char":1,"text":"Стій! Офіс затопило!"},{"char":0,"text":"Що?! Як?!"}]},{"background":"вулиця","enter":[{"char":2,"from":"left"}],"exit":[{"char":0},{"char":1},{"char":2}],"dialogs":[{"char":2,"text":"Я зварив каву прямо на тротуарі!"},{"char":1,"text":"Ти справжній герой!"},{"char":0,"text":"Іду першим!"}]}]};
 
     let parsed;
-    try {
-      parsed = JSON.parse(jsonMatch[0]);
-    } catch (e) {
-      await interaction.editReply(`⚠️ Не вдалось розпарсити JSON: ${e.message}`);
-      return;
+    if (tema.toLowerCase().trim() === 'моя') {
+      parsed = DEMO_STORY;
+    } else {
+      const raw = await callAgent('cartoon', tema);
+      if (!raw) { await interaction.editReply('⚠️ Не вдалось згенерувати сценарій.'); return; }
+
+      const jsonMatch = raw.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) { await interaction.editReply(`⚠️ Некоректний формат:\n\`\`\`${raw.substring(0,300)}\`\`\``); return; }
+
+      try {
+        parsed = JSON.parse(jsonMatch[0]);
+      } catch (e) {
+        await interaction.editReply(`⚠️ Не вдалось розпарсити JSON: ${e.message}`);
+        return;
+      }
     }
 
     const charNames = ['🔵 Остап', '🔴 Поліна', '🟢 Микола'];
