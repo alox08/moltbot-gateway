@@ -14,6 +14,6 @@ WORKDIR /app
 COPY package.json .
 RUN npm install
 
-COPY bot.js videomaker.js stickman.py comic.py ./
+COPY bot.js videomaker.js stickman.py comic.py cartoon.py ./
 
 CMD ["node", "bot.js"]

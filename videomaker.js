@@ -297,4 +297,24 @@ async function makeComicVideo(scenesJson) {
   return outputFile;
 }
 
-module.exports = { makeShortVideo, makeStickmanVideo, makeComicVideo };
+// ─── Cartoon відео (3 персонажі + анімація ходьби) ────────────────────────────
+
+async function makeCartoonVideo(scenesJson) {
+  const workDir = `/tmp/cartoon_${Date.now()}`;
+  fs.mkdirSync(workDir, { recursive: true });
+
+  const inputFile  = `${workDir}/input.json`;
+  const outputFile = `${workDir}/cartoon.mp4`;
+
+  fs.writeFileSync(inputFile, scenesJson);
+  console.log(`🎬 cartoon.py: ${JSON.parse(scenesJson).scenes.length} сцен`);
+
+  execSync(`python3 /app/cartoon.py --input "${inputFile}" --output "${outputFile}"`, {
+    stdio: 'pipe',
+    timeout: 600000,
+  });
+
+  return outputFile;
+}
+
+module.exports = { makeShortVideo, makeStickmanVideo, makeComicVideo, makeCartoonVideo };
