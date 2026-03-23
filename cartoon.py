@@ -1,22 +1,7 @@
 #!/usr/bin/env python3
 """
-Cartoon mini-movie generator v3 — Loading Artist style + emotions + rich backgrounds
+Cartoon mini-movie generator v4 — 1280x720 (16:9) South Park proportions
 Usage: python3 cartoon.py --input /tmp/input.json --output /tmp/output.mp4
-
-Input JSON:
-{
-  "scenes": [
-    {
-      "background": "місто",
-      "enter": [{"char": 0, "from": "left"}, {"char": 1, "from": "right"}],
-      "exit": [],
-      "dialogs": [
-        {"char": 0, "text": "Привіт!", "emotion": "normal"},
-        {"char": 1, "text": "Привіт!", "emotion": "surprised"}
-      ]
-    }
-  ]
-}
 
 Chars: 0=Остап(синій), 1=Поліна(рожевий), 2=Микола(зелений)
 Emotions: normal, talking, surprised, angry, sad
@@ -37,23 +22,29 @@ except ImportError:
     print("ERROR: edge-tts not installed", file=sys.stderr)
     sys.exit(1)
 
-# ─── Налаштування ─────────────────────────────────────────────────────────────
-
-W, H       = 480, 854
+# ─── Розміри кадру ─────────────────────────────────────────────────────────────
+#
+#   1280 × 720 (16:9) — стандарт мультиків (South Park, Family Guy...)
+#   Персонажі ~30% висоти кадру — пропорційні фону
+#
+W, H       = 1280, 720
 FPS        = 25
-S          = 0.72
-EYE_SCALE  = 1.35
-WALK_SPEED = 130
+S          = 0.48          # масштаб персонажів
+WALK_SPEED = 220           # px/s (ширший кадр — швидше)
+
+# ─── Кольори ──────────────────────────────────────────────────────────────────
 
 WHITE      = (255, 255, 255)
-STICK_LINE = (25, 25, 25)
-SKY_COL    = (135, 206, 235)
-GROUND_COL = (60, 140, 60)
-GROUND_LN  = (40, 100, 40)
-SUN_COL    = (255, 215, 0)
+STICK_LINE = (20,  20,  20)
+SKY_COL    = (130, 200, 235)
+GROUND_COL = (65,  148,  60)
+GROUND_LN  = (45,  118,  40)
+SUN_COL    = (255, 215,   0)
 BUBBLE_BG  = (255, 255, 255)
-BUBBLE_BD  = (30, 30, 30)
-TEXT_COL   = (20, 20, 20)
+BUBBLE_BD  = (25,  25,   25)
+TEXT_COL   = (15,  15,   15)
+
+# ─── Конфіг персонажів ────────────────────────────────────────────────────────
 
 CHAR_CFG = [
     {'jacket': (55, 115, 225),  'tie': (200, 20, 20),   'voice': 'uk-UA-OstapNeural',  'hair': None},
@@ -61,24 +52,30 @@ CHAR_CFG = [
     {'jacket': (50, 170, 80),   'tie': (255, 140, 0),   'voice': 'uk-UA-OstapNeural',  'hair': None},
 ]
 
-GROUND_Y = H - 90
-HEAD_RX  = int(98 * S)
-HEAD_RY  = int(84 * S)
-HEAD_CY  = GROUND_Y - int(420 * S)
-NECK_Y   = HEAD_CY + HEAD_RY + 4
-HIP_Y    = NECK_Y + int(165 * S)
-ARM_LEN  = int(90 * S)
-LW       = max(5, int(9 * S))
-SHIRT_W  = int(62 * S)
-SLEEVE_W = max(8, int(17 * S))
-LEG_W    = max(8, int(18 * S))
+# ─── Розміри персонажів ────────────────────────────────────────────────────────
+#
+#   GROUND_Y = 560 → 560..720 = 160px для дороги/трави під персонажами
+#   Персонаж зростом ~220px з 720 = 30.5% кадру (як South Park)
+#
 
-# ─── Слоти позицій ────────────────────────────────────────────────────────────
+GROUND_Y = 560
+HEAD_RX  = int(98  * S)   # = 47
+HEAD_RY  = int(84  * S)   # = 40
+HEAD_CY  = GROUND_Y - int(420 * S)   # = 560-201 = 359
+NECK_Y   = HEAD_CY + HEAD_RY + 4     # = 403
+HIP_Y    = NECK_Y  + int(165 * S)    # = 482
+ARM_LEN  = int(90  * S)   # = 43
+SHIRT_W  = int(62  * S)   # = 29
+SLEEVE_W = max(8,  int(17 * S))   # = 8
+LEG_W    = max(7,  int(18 * S))   # = 8
+LW       = max(4,  int(9  * S))   # = 4
+
+# ─── Слоти позицій (1280px) ───────────────────────────────────────────────────
 
 def slot_positions(n):
-    if n == 1: return [240]
-    if n == 2: return [130, 350]
-    return [90, 240, 390]
+    if n == 1: return [640]
+    if n == 2: return [380, 900]
+    return [230, 640, 1050]
 
 # ─── Шрифти ───────────────────────────────────────────────────────────────────
 
@@ -111,324 +108,61 @@ def get_duration(path):
             return float(s['duration'])
     return 2.0
 
-# ─── Хмара ────────────────────────────────────────────────────────────────────
+# ─── Допоміжні ────────────────────────────────────────────────────────────────
 
 def draw_cloud(draw, cx, cy, r):
     draw.ellipse([cx-r, cy-r//2, cx+r, cy+r//2], fill=WHITE)
     draw.ellipse([cx-r//2, cy-r*3//4, cx+r//2, cy+r//4], fill=WHITE)
-    draw.ellipse([cx+r//3, cy-r*2//3, cx+r+6, cy+r//4-3], fill=WHITE)
+    draw.ellipse([cx+r//3, cy-r*2//3, cx+r+8, cy+r//4-4], fill=WHITE)
 
-# ─── Машина ───────────────────────────────────────────────────────────────────
-
-def draw_car(draw, cx, cy, color, facing_right=True):
-    """cx — центр, cy — низ машини."""
-    cw, ch = 74, 28
+def draw_car(draw, cx, cy, color, facing_right=True, cw=100, ch=38):
+    """cx=центр, cy=низ машини."""
     x1, x2 = cx - cw//2, cx + cw//2
     y1, y2 = cy - ch, cy
-
     # Тінь
-    draw.rounded_rectangle([x1+4, y1+4, x2+4, y2+4], radius=6, fill=(100, 100, 100))
+    draw.rounded_rectangle([x1+5, y1+5, x2+5, y2+5], radius=8, fill=(90,90,90))
     # Корпус
-    draw.rounded_rectangle([x1, y1, x2, y2], radius=6, fill=color, outline=STICK_LINE, width=2)
-
-    # Кабіна (зміщена вперед)
-    roof_off = 6 if facing_right else -6
+    draw.rounded_rectangle([x1, y1, x2, y2], radius=8, fill=color, outline=STICK_LINE, width=3)
+    # Кабіна (зміщена вперед залежно від напрямку)
+    roof_off = 8 if facing_right else -8
     rx1 = cx - cw//4 + roof_off
     rx2 = cx + cw//4 + roof_off
-    draw.rounded_rectangle([rx1, y1-17, rx2, y1+5], radius=5, fill=color, outline=STICK_LINE, width=2)
-
+    draw.rounded_rectangle([rx1, y1-22, rx2, y1+6], radius=7, fill=color, outline=STICK_LINE, width=3)
     # Вікна
     mid_r = (rx1 + rx2) // 2
-    draw.rounded_rectangle([rx1+3, y1-14, mid_r-2, y1+2],
-                            radius=3, fill=(200, 235, 255))
-    draw.rounded_rectangle([mid_r+2, y1-14, rx2-3, y1+2],
-                            radius=3, fill=(200, 235, 255))
-
+    draw.rounded_rectangle([rx1+4, y1-18, mid_r-3, y1+3],
+                            radius=4, fill=(195, 230, 255))
+    draw.rounded_rectangle([mid_r+3, y1-18, rx2-4, y1+3],
+                            radius=4, fill=(195, 230, 255))
     # Колеса
-    for wx in [x1+13, x2-13]:
-        draw.ellipse([wx-9, y2-9, wx+9, y2+7], fill=(30, 30, 30))
-        draw.ellipse([wx-5, y2-6, wx+5, y2+4], fill=(80, 80, 80))
+    for wx in [x1+16, x2-16]:
+        draw.ellipse([wx-12, y2-11, wx+12, y2+9], fill=(25,25,25))
+        draw.ellipse([wx-7,  y2-7,  wx+7,  y2+5], fill=(75,75,75))
+    # Фара / задній ліхтар
+    fx = x2-6 if facing_right else x1+6
+    draw.ellipse([fx-7, y1+9, fx+7, y1+20], fill=(255,250,180))
+    bx = x1+6 if facing_right else x2-6
+    draw.ellipse([bx-5, y1+9, bx+5, y1+20], fill=(220,55,55))
 
-    # Фара
-    fx = x2 - 5 if facing_right else x1 + 5
-    draw.ellipse([fx-5, y1+7, fx+5, y1+15], fill=(255, 250, 180))
-
-    # Задній ліхтар
-    bx = x1 + 5 if facing_right else x2 - 5
-    draw.ellipse([bx-4, y1+7, bx+4, y1+15], fill=(220, 60, 60))
-
-# ─── Дерево ───────────────────────────────────────────────────────────────────
-
-def draw_tree(draw, tx, gy, trunk_h=60, crown_r=38, sway=0):
+def draw_tree(draw, tx, sway=0, scale=1.0):
+    h = int(80 * scale)
+    r = int(52 * scale)
     # Стовбур
     draw.polygon([
-        (tx - 7, gy),
-        (tx + 7, gy),
-        (tx + 4 + sway, gy - trunk_h),
-        (tx - 4 + sway, gy - trunk_h),
-    ], fill=(110, 75, 35))
+        (tx-9, GROUND_Y),
+        (tx+9, GROUND_Y),
+        (tx+5+sway, GROUND_Y-h),
+        (tx-5+sway, GROUND_Y-h),
+    ], fill=(108, 72, 30))
     # Тінь крони
-    draw.ellipse([tx - crown_r + sway + 4, gy - trunk_h - int(crown_r*1.9) + 4,
-                  tx + crown_r + sway + 4, gy - trunk_h + int(crown_r*0.3) + 4],
-                 fill=(40, 120, 40))
+    draw.ellipse([tx-r+sway+6, GROUND_Y-h-int(r*1.85)+6,
+                  tx+r+sway+6, GROUND_Y-h+int(r*0.3)+6], fill=(38,115,38))
     # Крона
-    draw.ellipse([tx - crown_r + sway, gy - trunk_h - int(crown_r*1.9),
-                  tx + crown_r + sway, gy - trunk_h + int(crown_r*0.3)],
-                 fill=(65, 165, 60))
+    draw.ellipse([tx-r+sway, GROUND_Y-h-int(r*1.85),
+                  tx+r+sway, GROUND_Y-h+int(r*0.3)], fill=(62,158,55))
     # Відблиск
-    draw.ellipse([tx - crown_r//2 + sway, gy - trunk_h - int(crown_r*1.7),
-                  tx + sway,               gy - trunk_h - crown_r],
-                 fill=(90, 190, 80))
-
-# ─── Фони ─────────────────────────────────────────────────────────────────────
-
-def bg_street(draw, fi):
-    """Проста вулиця з сонцем і хмарами."""
-    draw.rectangle([(0,0),(W,GROUND_Y)], fill=SKY_COL)
-    draw.rectangle([(0,GROUND_Y),(W,H)], fill=GROUND_COL)
-    draw.line([(0,GROUND_Y),(W,GROUND_Y)], fill=GROUND_LN, width=4)
-    # Сонце
-    draw.ellipse([W-85,18,W-18,85], fill=SUN_COL)
-    sx, sy = W-52, 52
-    for i in range(8):
-        a = math.radians(i*45 + fi*0.6)
-        draw.line([(sx+math.cos(a)*43, sy+math.sin(a)*43),
-                   (sx+math.cos(a)*56, sy+math.sin(a)*56)], fill=(255,200,0), width=3)
-    off = int(fi*0.35) % (W+160)
-    draw_cloud(draw, 240-off, 70, 44)
-    draw_cloud(draw, 60+W//2-off, 120, 30)
-
-def bg_city(draw, fi):
-    """Місто: будинки + тротуар + дорога + машини."""
-    # Небо
-    draw.rectangle([(0,0),(W, GROUND_Y-65)], fill=(165, 205, 235))
-
-    # Будинки (фон)
-    bldgs = [
-        (  0, 155,  95, (148, 148, 158)),
-        ( 90, 115,  82, (138, 143, 153)),
-        (168, 175,  98, (158, 153, 148)),
-        (260, 138,  88, (143, 148, 158)),
-        (343, 162, 102, (153, 148, 153)),
-        (440, 128,  60, (148, 152, 148)),
-    ]
-    for bx, bh, bw, bcol in bldgs:
-        by = GROUND_Y - 65 - bh
-        draw.rectangle([bx, by, bx+bw, GROUND_Y-65], fill=bcol)
-        draw.line([(bx,by),(bx+bw,by)], fill=(100,104,112), width=2)
-        draw.line([(bx,by),(bx,GROUND_Y-65)], fill=(110,114,122), width=1)
-        draw.line([(bx+bw,by),(bx+bw,GROUND_Y-65)], fill=(110,114,122), width=1)
-        # Вікна
-        for wy in range(by+7, GROUND_Y-72, 24):
-            for wx in range(bx+6, bx+bw-8, 19):
-                lit = (fi//28 + wx//16 + wy//22) % 4 != 0
-                wc  = (255, 238, 155) if lit else (70, 74, 84)
-                draw.rectangle([wx, wy, wx+11, wy+14], fill=wc)
-
-    # Тротуар
-    sw = GROUND_Y - 65   # sidewalk top
-    draw.rectangle([(0, sw),(W, GROUND_Y)], fill=(188, 183, 178))
-    draw.line([(0,sw),(W,sw)], fill=(158,153,148), width=2)
-    # Плитки тротуару
-    for tx in range(0, W, 38):
-        draw.line([(tx, sw),(tx, GROUND_Y)], fill=(172,167,162), width=1)
-    for ty_t in range(sw+20, GROUND_Y, 20):
-        draw.line([(0,ty_t),(W,ty_t)], fill=(172,167,162), width=1)
-
-    # Дорога
-    draw.rectangle([(0,GROUND_Y),(W,H)], fill=(78, 78, 82))
-    # Розмітка
-    dash, gap = 34, 26
-    total_d   = dash + gap
-    off_d     = int(fi * 2.5) % total_d
-    for x in range(-total_d, W+total_d, total_d):
-        xs = x - off_d
-        draw.rectangle([xs, GROUND_Y+32, xs+dash, GROUND_Y+38], fill=(255,255,100))
-
-    # Машини
-    c1x = W + 90 - int(fi * 1.9) % (W + 180)
-    c2x = int(fi * 1.5) % (W + 180) - 90
-    draw_car(draw, c1x, GROUND_Y + 22, (200, 60, 60),  facing_right=False)
-    draw_car(draw, c2x, GROUND_Y + 52, (60, 110, 210), facing_right=True)
-
-def bg_park(draw, fi):
-    """Парк: небо, трава, дерева, лавка, доріжка."""
-    draw.rectangle([(0,0),(W,GROUND_Y)], fill=(155, 215, 245))
-    draw.rectangle([(0,GROUND_Y),(W,H)], fill=(72, 158, 68))
-    draw.line([(0,GROUND_Y),(W,GROUND_Y)], fill=(55, 132, 50), width=3)
-
-    # Доріжка
-    draw.ellipse([-50, GROUND_Y-12, W+50, GROUND_Y+28], fill=(200, 183, 158))
-
-    # Сонце
-    draw.ellipse([W-82,16,W-20,78], fill=SUN_COL)
-    sx, sy = W-51, 47
-    for i in range(8):
-        a = math.radians(i*45 + fi*0.5)
-        draw.line([(sx+math.cos(a)*40, sy+math.sin(a)*40),
-                   (sx+math.cos(a)*52, sy+math.sin(a)*52)], fill=(255,200,0), width=2)
-
-    # Хмари
-    off = int(fi*0.28) % (W+160)
-    draw_cloud(draw, 160-off, 50, 42)
-    draw_cloud(draw, 55+W//2-off, 88, 26)
-
-    # Дерева з похитуванням
-    sw1 = int(math.sin(fi * 0.04) * 4)
-    sw2 = int(math.sin(fi * 0.04 + 1.2) * 3)
-    draw_tree(draw, 42,  GROUND_Y, 62, 38, sw1)
-    draw_tree(draw, 132, GROUND_Y, 48, 29, sw2)
-    draw_tree(draw, 375, GROUND_Y, 66, 42, sw1)
-    draw_tree(draw, 455, GROUND_Y, 52, 33, sw2)
-
-    # Лавка
-    bx = 255
-    for lx in [bx-24, bx+24]:
-        draw.rectangle([lx-3, GROUND_Y-22, lx+3, GROUND_Y], fill=(128, 96, 52))
-    draw.rounded_rectangle([bx-32, GROUND_Y-26, bx+32, GROUND_Y-16],
-                            radius=3, fill=(158, 118, 68), outline=(118, 88, 46), width=2)
-    draw.rounded_rectangle([bx-30, GROUND_Y-40, bx+30, GROUND_Y-30],
-                            radius=3, fill=(158, 118, 68), outline=(118, 88, 46), width=2)
-
-def bg_office(draw, fi):
-    """Офіс з вікнами і столом з монітором."""
-    draw.rectangle([(0,0),(W,H)], fill=(222, 212, 197))
-    draw.rectangle([(0,H-140),(W,H)], fill=(182, 162, 132))
-    draw.line([(0,H-140),(W,H-140)], fill=(152, 132, 102), width=3)
-    # Вікна
-    draw.rectangle([20,50,178,200], fill=(180,225,255), outline=STICK_LINE, width=4)
-    draw.line([(99,50),(99,200)], fill=STICK_LINE, width=3)
-    draw.line([(20,125),(178,125)], fill=STICK_LINE, width=3)
-    draw.rectangle([262,50,420,200], fill=(180,225,255), outline=STICK_LINE, width=4)
-    draw.line([(341,50),(341,200)], fill=STICK_LINE, width=3)
-    draw.line([(262,125),(420,125)], fill=STICK_LINE, width=3)
-    # Стіл
-    desk_y = GROUND_Y - 72
-    draw.rounded_rectangle([90, desk_y, 390, desk_y+14],
-                            radius=4, fill=(160, 128, 88), outline=(128, 96, 64), width=2)
-    # Ніжки столу
-    for lx in [110, 370]:
-        draw.rectangle([lx-5, desk_y+14, lx+5, GROUND_Y], fill=(140, 108, 72))
-    # Монітор
-    mx = 210
-    draw.rounded_rectangle([mx, desk_y-88, mx+80, desk_y+2],
-                            radius=4, fill=(30,30,30), outline=STICK_LINE, width=2)
-    # Екран — мерехтить між зеленим і синім
-    sc = (40, 200, 80) if (fi // 18) % 2 == 0 else (60, 130, 220)
-    draw.rounded_rectangle([mx+5, desk_y-83, mx+75, desk_y-3], radius=2, fill=sc)
-    # Підставка монітора
-    draw.rounded_rectangle([mx+32, desk_y, mx+48, desk_y+12],
-                            radius=2, fill=(50,50,50))
-    draw.rounded_rectangle([mx+20, desk_y+10, mx+60, desk_y+14],
-                            radius=2, fill=(50,50,50))
-    # Клавіатура
-    draw.rounded_rectangle([mx+90, desk_y-8, mx+170, desk_y+4],
-                            radius=3, fill=(60,60,60), outline=(40,40,40), width=1)
-    for ki in range(6):
-        kx = mx+96 + ki*12
-        draw.rounded_rectangle([kx, desk_y-6, kx+9, desk_y+2],
-                                radius=1, fill=(80,80,80))
-
-def bg_night(draw, fi):
-    draw.rectangle([(0,0),(W,GROUND_Y)], fill=(15,15,45))
-    draw.rectangle([(0,GROUND_Y),(W,H)], fill=(30,50,30))
-    draw.line([(0,GROUND_Y),(W,GROUND_Y)], fill=(20,40,20), width=4)
-    draw.ellipse([W-85,18,W-18,85], fill=(240,235,180))
-    draw.ellipse([W-68,12,W-8,72], fill=(15,15,45))
-    stars = [(55,45),(110,28),(195,65),(275,38),(345,58),(395,32),(48,95),(315,85),(160,40)]
-    for i, (sx, sy) in enumerate(stars):
-        r = 3 + ((fi//14+i) % 2)
-        draw.ellipse([sx-r,sy-r,sx+r,sy+r], fill=(255,255,200))
-
-def bg_store(draw, fi):
-    draw.rectangle([(0,0),(W,H)], fill=(240,235,220))
-    draw.rectangle([(0,H-110),(W,H)], fill=(200,190,170))
-    draw.line([(0,H-110),(W,H-110)], fill=(160,150,130), width=3)
-    colors = [(220,80,80),(80,180,80),(80,80,220),(220,180,40),(180,80,220),(80,200,180)]
-    for row, sy in enumerate([50,145,240]):
-        draw.rectangle([(0,sy+48),(W,sy+54)], fill=(140,100,60))
-        draw.rectangle([(0,sy),(4,sy+54)], fill=(140,100,60))
-        draw.rectangle([(W-4,sy),(W,sy+54)], fill=(140,100,60))
-        for col in range(7):
-            x1_s = 8 + col*66
-            c = colors[(row*4+col) % len(colors)]
-            draw.rounded_rectangle([x1_s,sy+7,x1_s+50,sy+46],
-                                    radius=4, fill=c, outline=STICK_LINE, width=2)
-
-def bg_kitchen(draw, fi):
-    draw.rectangle([(0,0),(W,H)], fill=(250,245,230))
-    draw.rectangle([(0,GROUND_Y),(W,H)], fill=(200,180,150))
-    draw.rectangle([(0,GROUND_Y),(W,GROUND_Y+16)], fill=(160,140,110))
-    draw.line([(0,GROUND_Y),(W,GROUND_Y)], fill=STICK_LINE, width=2)
-    draw.rectangle([W//2-75,45,W//2+75,195], fill=(180,230,240), outline=STICK_LINE, width=4)
-    draw.line([(W//2,45),(W//2,195)], fill=STICK_LINE, width=3)
-    draw.line([(W//2-75,120),(W//2+75,120)], fill=STICK_LINE, width=3)
-    draw.rounded_rectangle([8,55,95,205], radius=5, fill=(210,195,170), outline=STICK_LINE, width=3)
-    draw.rounded_rectangle([W-95,55,W-8,205], radius=5, fill=(210,195,170), outline=STICK_LINE, width=3)
-
-def bg_hell(draw, fi):
-    """Пекло: темно-червоне небо, вогонь, скелі, тріщини."""
-    # Небо
-    draw.rectangle([(0,0),(W,GROUND_Y)], fill=(75, 14, 14))
-    # Тло — туманний оранжевий градієнт знизу
-    for i in range(60):
-        alpha = i / 60
-        c = int(75 + alpha * 60), int(14 + alpha * 20), int(14)
-        draw.rectangle([(0, GROUND_Y-60+i), (W, GROUND_Y-59+i)], fill=c)
-
-    # Земля
-    draw.rectangle([(0,GROUND_Y),(W,H)], fill=(48, 18, 8))
-    draw.line([(0,GROUND_Y),(W,GROUND_Y)], fill=(90, 30, 12), width=3)
-
-    # Тріщини на землі з жаром
-    cracks = [
-        [(40,GROUND_Y),(65,GROUND_Y+28),(95,GROUND_Y+12)],
-        [(200,GROUND_Y),(218,GROUND_Y+22),(245,GROUND_Y+8)],
-        [(320,GROUND_Y),(340,GROUND_Y+30),(368,GROUND_Y+14)],
-    ]
-    for pts in cracks:
-        draw.line(pts, fill=(220, 90, 20), width=3)
-
-    # Скелі фону
-    rocks = [(20,50,80), (110,65,70), (215,45,85), (335,72,80), (420,55,70)]
-    for rx, rh, rw in rocks:
-        draw.polygon([
-            (rx, GROUND_Y), (rx+rw, GROUND_Y),
-            (rx+rw-15, GROUND_Y-rh), (rx+15, GROUND_Y-rh)
-        ], fill=(48, 20, 12))
-
-    # Вогонь (анімований)
-    flames = [30, 88, 150, 220, 295, 368, 435]
-    for i, fx in enumerate(flames):
-        phase = fi * 0.18 + i * 0.9
-        fh    = int(50 + math.sin(phase) * 20)
-        fw    = int(22 + math.sin(phase * 1.3) * 6)
-        flick = int(math.sin(phase * 2.1) * 5)
-
-        # Шари: зовнішній (темно-оранжевий) → середній → ядро (жовте)
-        layers = [
-            ((200, 50, 0),  fw,      fh),
-            ((240, 120, 0), fw-5,    int(fh*0.75)),
-            ((255, 210, 30),fw-11,   int(fh*0.45)),
-        ]
-        for col, w_f, h_f in layers:
-            draw.ellipse([
-                fx - w_f + flick, GROUND_Y - h_f,
-                fx + w_f + flick, GROUND_Y + 5
-            ], fill=col)
-
-BG = {
-    'вулиця':  bg_street,  'street':  bg_street,
-    'місто':   bg_city,    'city':    bg_city,
-    'офіс':    bg_office,  'office':  bg_office,
-    'парк':    bg_park,    'park':    bg_park,
-    'ніч':     bg_night,   'night':   bg_night,
-    'магазин': bg_store,   'store':   bg_store,
-    'кухня':   bg_kitchen, 'kitchen': bg_kitchen,
-    'пекло':   bg_hell,    'hell':    bg_hell,
-}
-
-# ─── Допоміжні ────────────────────────────────────────────────────────────────
+    draw.ellipse([tx-r//2+sway, GROUND_Y-h-int(r*1.7),
+                  tx+sway,      GROUND_Y-h-r], fill=(85, 185, 75))
 
 def _seg(draw, x1, y1, x2, y2, color, w):
     dx, dy = x2-x1, y2-y1
@@ -445,117 +179,397 @@ def _limb(draw, pts, color, w):
     for x, y in pts:
         draw.ellipse([x-r, y-r, x+r, y+r], fill=color)
 
-# ─── Обличчя (Loading Artist + 5 емоцій) ─────────────────────────────────────
+# ─── Фони ─────────────────────────────────────────────────────────────────────
+
+def bg_street(draw, fi):
+    draw.rectangle([(0,0),(W,GROUND_Y)], fill=SKY_COL)
+    draw.rectangle([(0,GROUND_Y),(W,H)], fill=GROUND_COL)
+    draw.line([(0,GROUND_Y),(W,GROUND_Y)], fill=GROUND_LN, width=5)
+    # Сонце
+    draw.ellipse([W-110,20,W-20,110], fill=SUN_COL)
+    sx, sy = W-65, 65
+    for i in range(8):
+        a = math.radians(i*45 + fi*0.6)
+        draw.line([(sx+math.cos(a)*58, sy+math.sin(a)*58),
+                   (sx+math.cos(a)*75, sy+math.sin(a)*75)], fill=(255,200,0), width=4)
+    off = int(fi*0.45) % (W+200)
+    draw_cloud(draw, 320-off, 85, 60)
+    draw_cloud(draw, 700-off, 50, 42)
+    draw_cloud(draw, 1050-off, 95, 52)
+
+def bg_city(draw, fi):
+    """Місто з будівлями, тротуаром і рухомими машинами."""
+    # Небо
+    draw.rectangle([(0,0),(W, GROUND_Y-80)], fill=(158, 198, 232))
+
+    # Будинки (14 штук по всій ширині 1280px)
+    bldgs = [
+        (   0, 250, 95,  (142,144,154)),
+        (  90, 200, 82,  (132,138,148)),
+        ( 168, 310, 100, (152,148,142)),
+        ( 263, 220, 88,  (138,144,152)),
+        ( 346, 280, 106, (148,142,148)),
+        ( 447, 190, 80,  (144,148,138)),
+        ( 522, 340, 110, (150,146,140)),
+        ( 627, 240, 92,  (136,142,150)),
+        ( 714, 300, 100, (146,142,155)),
+        ( 809, 210, 88,  (140,148,142)),
+        ( 892, 270, 98,  (144,140,152)),
+        ( 985, 320, 102, (150,145,140)),
+        (1082, 230, 94,  (138,144,148)),
+        (1171, 260, 109, (148,150,144)),
+    ]
+    sw_top = GROUND_Y - 80   # верх тротуару
+    for bx, bh, bw, bcol in bldgs:
+        by = sw_top - bh
+        draw.rectangle([bx, by, bx+bw, sw_top], fill=bcol)
+        draw.line([(bx,by),(bx+bw,by)], fill=(100,104,112), width=2)
+        draw.line([(bx,by),(bx,sw_top)], fill=(110,112,120), width=1)
+        draw.line([(bx+bw,by),(bx+bw,sw_top)], fill=(110,112,120), width=1)
+        # Вікна
+        for wy in range(by+10, sw_top-12, 30):
+            for wx in range(bx+8, bx+bw-10, 24):
+                lit = (fi//30 + wx//18 + wy//25) % 4 != 0
+                wc  = (255,235,148) if lit else (68,72,82)
+                draw.rectangle([wx, wy, wx+14, wy+18], fill=wc)
+
+    # Тротуар
+    draw.rectangle([(0, sw_top),(W, GROUND_Y)], fill=(185,180,174))
+    draw.line([(0,sw_top),(W,sw_top)], fill=(155,150,144), width=2)
+    for tx in range(0, W, 48):
+        draw.line([(tx,sw_top),(tx,GROUND_Y)], fill=(168,163,157), width=1)
+    for ty_t in range(sw_top+24, GROUND_Y, 24):
+        draw.line([(0,ty_t),(W,ty_t)], fill=(168,163,157), width=1)
+
+    # Дорога
+    draw.rectangle([(0,GROUND_Y),(W,H)], fill=(72,72,76))
+    # Розмітка
+    dash, gap = 50, 35
+    total_d   = dash + gap
+    off_d     = int(fi * 3.5) % total_d
+    lane_y    = GROUND_Y + 80
+    for x in range(-total_d, W+total_d, total_d):
+        xs = x - off_d
+        draw.rectangle([xs, lane_y-4, xs+dash, lane_y+4], fill=(255,255,100))
+
+    # Машини (3 штуки)
+    c1x = W + 160 - int(fi * 2.8) % (W + 320)
+    c2x = int(fi * 2.0) % (W + 320) - 160
+    c3x = W//2 + 320 - int(fi * 1.5) % (W + 320)
+    draw_car(draw, c1x, GROUND_Y+55,  (205, 58, 58),  facing_right=False, cw=108, ch=42)
+    draw_car(draw, c2x, GROUND_Y+110, (58, 108, 210), facing_right=True,  cw=108, ch=42)
+    draw_car(draw, c3x, GROUND_Y+55,  (58, 185, 85),  facing_right=False, cw=100, ch=38)
+
+def bg_park(draw, fi):
+    """Парк з деревами, лавкою, доріжкою."""
+    draw.rectangle([(0,0),(W,GROUND_Y)], fill=(148,212,242))
+    draw.rectangle([(0,GROUND_Y),(W,H)], fill=(68,155,62))
+    draw.line([(0,GROUND_Y),(W,GROUND_Y)], fill=(50,128,45), width=5)
+    # Доріжка
+    draw.ellipse([-80, GROUND_Y-18, W+80, GROUND_Y+42], fill=(195,178,152))
+    # Сонце
+    draw.ellipse([W-110,20,W-20,110], fill=SUN_COL)
+    sx, sy = W-65, 65
+    for i in range(8):
+        a = math.radians(i*45 + fi*0.5)
+        draw.line([(sx+math.cos(a)*55, sy+math.sin(a)*55),
+                   (sx+math.cos(a)*72, sy+math.sin(a)*72)], fill=(255,200,0), width=3)
+    # Хмари
+    off = int(fi*0.35) % (W+200)
+    draw_cloud(draw, 200-off, 65, 55)
+    draw_cloud(draw, 580-off, 40, 38)
+    draw_cloud(draw, 950-off, 75, 48)
+    # Дерева (8 штук, різного розміру)
+    sw1 = int(math.sin(fi*0.04)*5)
+    sw2 = int(math.sin(fi*0.04+1.3)*4)
+    draw_tree(draw, 50,   sw1, 1.0)
+    draw_tree(draw, 148,  sw2, 0.75)
+    draw_tree(draw, 258,  sw1, 0.85)
+    draw_tree(draw, 980,  sw2, 0.9)
+    draw_tree(draw, 1085, sw1, 1.1)
+    draw_tree(draw, 1180, sw2, 0.8)
+    draw_tree(draw, 430,  sw1, 0.6)
+    draw_tree(draw, 870,  sw2, 0.65)
+    # Лавка
+    for bx in [560, 740]:
+        for lx in [bx-30, bx+30]:
+            draw.rectangle([lx-4, GROUND_Y-28, lx+4, GROUND_Y], fill=(120,90,46))
+        draw.rounded_rectangle([bx-42, GROUND_Y-32, bx+42, GROUND_Y-20],
+                                radius=4, fill=(152,112,62), outline=(112,82,40), width=2)
+        draw.rounded_rectangle([bx-40, GROUND_Y-50, bx+40, GROUND_Y-36],
+                                radius=4, fill=(152,112,62), outline=(112,82,40), width=2)
+
+def bg_office(draw, fi):
+    """Офіс: кімната з вікнами, стіл з монітором."""
+    draw.rectangle([(0,0),(W,H)], fill=(218,208,192))
+    draw.rectangle([(0,H-155),(W,H)], fill=(178,158,128))
+    draw.line([(0,H-155),(W,H-155)], fill=(148,128,98), width=3)
+    # 4 вікна
+    for wx in [40, 300, 720, 980]:
+        draw.rectangle([wx, 40, wx+200, 220], fill=(175,222,255), outline=STICK_LINE, width=4)
+        draw.line([(wx+100,40),(wx+100,220)], fill=STICK_LINE, width=3)
+        draw.line([(wx,130),(wx+200,130)], fill=STICK_LINE, width=3)
+    # Стіл
+    desk_y = GROUND_Y - 82
+    draw.rounded_rectangle([180, desk_y, 1100, desk_y+16],
+                            radius=5, fill=(155,122,84), outline=(122,92,60), width=2)
+    for lx in [220, 1060]:
+        draw.rectangle([lx-6, desk_y+16, lx+6, GROUND_Y], fill=(135,102,68))
+    # 2 монітори
+    for mx in [340, 820]:
+        draw.rounded_rectangle([mx, desk_y-100, mx+100, desk_y+4],
+                                radius=5, fill=(28,28,28), outline=STICK_LINE, width=2)
+        sc = (38,195,75) if (fi//20) % 2 == 0 else (55,125,215)
+        draw.rounded_rectangle([mx+6, desk_y-94, mx+94, desk_y-6], radius=3, fill=sc)
+        draw.rounded_rectangle([mx+42, desk_y+4, mx+58, desk_y+16],
+                                radius=2, fill=(45,45,45))
+        draw.rounded_rectangle([mx+28, desk_y+15, mx+72, desk_y+19],
+                                radius=2, fill=(45,45,45))
+        # Клавіатура
+        draw.rounded_rectangle([mx+108, desk_y-10, mx+220, desk_y+7],
+                                radius=4, fill=(55,55,55), outline=(35,35,35), width=1)
+        for ki in range(7):
+            draw.rounded_rectangle([mx+114+ki*14, desk_y-7, mx+126+ki*14, desk_y+3],
+                                    radius=1, fill=(75,75,75))
+
+def bg_night(draw, fi):
+    draw.rectangle([(0,0),(W,GROUND_Y)], fill=(12,12,42))
+    draw.rectangle([(0,GROUND_Y),(W,H)], fill=(28,48,28))
+    draw.line([(0,GROUND_Y),(W,GROUND_Y)], fill=(18,38,18), width=5)
+    draw.ellipse([W-110,20,W-20,110], fill=(238,232,175))
+    draw.ellipse([W-88,14,W-10,88], fill=(12,12,42))
+    stars = [
+        (62,42),(115,26),(198,60),(275,35),(348,55),(398,28),
+        (48,92),(312,82),(158,38),(480,48),(620,25),(750,65),
+        (880,40),(1020,30),(1150,55),(1240,45),(540,88),(790,22),
+    ]
+    for i, (sx_s, sy_s) in enumerate(stars):
+        r = 3 + ((fi//16+i) % 2)
+        draw.ellipse([sx_s-r,sy_s-r,sx_s+r,sy_s+r], fill=(255,255,198))
+
+def bg_store(draw, fi):
+    draw.rectangle([(0,0),(W,H)], fill=(238,232,218))
+    draw.rectangle([(0,H-130),(W,H)], fill=(198,188,168))
+    draw.line([(0,H-130),(W,H-130)], fill=(158,148,128), width=3)
+    colors = [(220,80,80),(80,180,80),(80,80,220),(220,180,40),(180,80,220),(80,200,180)]
+    for row, sy in enumerate([40,138,236]):
+        draw.rectangle([(0,sy+56),(W,sy+64)], fill=(138,98,55))
+        draw.rectangle([(0,sy),(5,sy+64)], fill=(138,98,55))
+        draw.rectangle([(W-5,sy),(W,sy+64)], fill=(138,98,55))
+        for col in range(12):
+            x1_s = 10 + col*105
+            c = colors[(row*5+col) % len(colors)]
+            draw.rounded_rectangle([x1_s,sy+8,x1_s+78,sy+55],
+                                    radius=5, fill=c, outline=STICK_LINE, width=2)
+
+def bg_kitchen(draw, fi):
+    draw.rectangle([(0,0),(W,H)], fill=(248,242,228))
+    draw.rectangle([(0,GROUND_Y),(W,H)], fill=(198,178,148))
+    draw.rectangle([(0,GROUND_Y),(W,GROUND_Y+20)], fill=(158,138,108))
+    draw.line([(0,GROUND_Y),(W,GROUND_Y)], fill=STICK_LINE, width=2)
+    draw.rectangle([W//2-100,42,W//2+100,238], fill=(178,228,242), outline=STICK_LINE, width=5)
+    draw.line([(W//2,42),(W//2,238)], fill=STICK_LINE, width=3)
+    draw.line([(W//2-100,140),(W//2+100,140)], fill=STICK_LINE, width=3)
+    draw.rounded_rectangle([10,52,120,242], radius=6, fill=(208,192,168), outline=STICK_LINE, width=3)
+    draw.rounded_rectangle([W-120,52,W-10,242], radius=6, fill=(208,192,168), outline=STICK_LINE, width=3)
+
+def bg_hell(draw, fi):
+    draw.rectangle([(0,0),(W,GROUND_Y)], fill=(72,12,12))
+    for i in range(80):
+        alpha = i / 80
+        c = (int(72+alpha*65), int(12+alpha*22), 12)
+        draw.rectangle([(0,GROUND_Y-80+i),(W,GROUND_Y-79+i)], fill=c)
+    draw.rectangle([(0,GROUND_Y),(W,H)], fill=(45,16,8))
+    draw.line([(0,GROUND_Y),(W,GROUND_Y)], fill=(88,28,10), width=4)
+    # Тріщини
+    cracks = [
+        [(55,GROUND_Y),(85,GROUND_Y+38),(122,GROUND_Y+18)],
+        [(320,GROUND_Y),(345,GROUND_Y+32),(378,GROUND_Y+12)],
+        [(640,GROUND_Y),(660,GROUND_Y+40),(695,GROUND_Y+20)],
+        [(900,GROUND_Y),(928,GROUND_Y+35),(958,GROUND_Y+14)],
+        [(1180,GROUND_Y),(1205,GROUND_Y+38),(1238,GROUND_Y+18)],
+    ]
+    for pts in cracks:
+        draw.line(pts, fill=(218,85,18), width=4)
+    # Скелі
+    rocks = [(20,70,110),(165,88,95),(380,65,110),(600,82,100),(840,72,95),(1060,90,110),(1210,68,100)]
+    for rx, rh, rw in rocks:
+        draw.polygon([
+            (rx,GROUND_Y),(rx+rw,GROUND_Y),
+            (rx+rw-18,GROUND_Y-rh),(rx+18,GROUND_Y-rh)
+        ], fill=(44,18,10))
+    # Вогонь (12 джерел)
+    flames_x = [35, 95, 175, 265, 360, 480, 610, 730, 860, 980, 1100, 1215]
+    for i, fx in enumerate(flames_x):
+        phase = fi*0.18 + i*0.85
+        fh    = int(65 + math.sin(phase)*26)
+        fw    = int(28 + math.sin(phase*1.3)*8)
+        flick = int(math.sin(phase*2.2)*7)
+        for col, w_f, h_f in [
+            ((198,48,0),  fw,    fh),
+            ((238,118,0), fw-6,  int(fh*0.72)),
+            ((255,205,28),fw-14, int(fh*0.42)),
+        ]:
+            draw.ellipse([fx-w_f+flick, GROUND_Y-h_f, fx+w_f+flick, GROUND_Y+6], fill=col)
+
+BG = {
+    'вулиця':  bg_street,  'street':  bg_street,
+    'місто':   bg_city,    'city':    bg_city,
+    'офіс':    bg_office,  'office':  bg_office,
+    'парк':    bg_park,    'park':    bg_park,
+    'ніч':     bg_night,   'night':   bg_night,
+    'магазин': bg_store,   'store':   bg_store,
+    'кухня':   bg_kitchen, 'kitchen': bg_kitchen,
+    'пекло':   bg_hell,    'hell':    bg_hell,
+}
+
+# ─── Обличчя ──────────────────────────────────────────────────────────────────
 
 def draw_face(draw, fi, cx, facing_right, emotion, talking):
-    fs  = 8 if facing_right else -8
-    ey  = HEAD_CY - int(8 * S)
+    """
+    Чисте обличчя без тіні — Loading Artist стиль.
+    Емоції: normal, talking, surprised, angry, sad
+    """
+    fs  = int(6*S) if facing_right else -int(6*S)
+    ey  = HEAD_CY - int(10*S)
 
+    # ── Розміри очей ──
     if facing_right:
-        el_cx = cx - int(26*S) + fs
-        er_cx = cx + int(40*S) + fs//2
-        er_l  = int(int(27*S) * EYE_SCALE)
-        pr_l  = int(int(15*S) * EYE_SCALE)
-        er_r  = int(int(33*S) * EYE_SCALE)
-        pr_r  = int(int(19*S) * EYE_SCALE)
+        el_cx = cx - int(24*S) + fs
+        er_cx = cx + int(38*S) + fs//2
     else:
-        el_cx = cx - int(40*S) + fs//2
-        er_cx = cx + int(26*S) + fs
-        er_l  = int(int(33*S) * EYE_SCALE)
-        pr_l  = int(int(19*S) * EYE_SCALE)
-        er_r  = int(int(27*S) * EYE_SCALE)
-        pr_r  = int(int(15*S) * EYE_SCALE)
+        el_cx = cx - int(38*S) + fs//2
+        er_cx = cx + int(24*S) + fs
 
+    # Базові радіуси (без EYE_SCALE)
+    er_l  = int(22*S)
+    pr_l  = int(12*S)
+    er_r  = int(28*S)
+    pr_r  = int(16*S)
+
+    # Зробити ліве/праве правильно при повороті
+    if not facing_right:
+        er_l, er_r = er_r, er_l
+        pr_l, pr_r = pr_r, pr_l
+
+    # Surprised — злегка більші очі
     if emotion == 'surprised':
-        er_l = int(er_l * 1.25)
-        er_r = int(er_r * 1.25)
-        pr_l = int(pr_l * 1.1)
-        pr_r = int(pr_r * 1.1)
+        er_l = int(er_l * 1.2)
+        er_r = int(er_r * 1.2)
 
-    # Очі
-    draw.ellipse([el_cx-er_l, ey-er_l, el_cx+er_l, ey+er_l],
-                 fill=WHITE, outline=STICK_LINE, width=3)
-    draw.ellipse([el_cx-pr_l//2+1, ey-pr_l//2, el_cx+pr_l//2+1, ey+pr_l//2+1],
-                 fill=STICK_LINE)
-    draw.ellipse([el_cx-7, ey-int(er_l*0.5), el_cx, ey-int(er_l*0.15)], fill=WHITE)
+    # Малюємо очі
+    for ecx, er, pr in [(el_cx, er_l, pr_l), (er_cx, er_r, pr_r)]:
+        draw.ellipse([ecx-er, ey-er, ecx+er, ey+er],
+                     fill=WHITE, outline=STICK_LINE, width=3)
+        draw.ellipse([ecx-pr//2+1, ey-pr//2, ecx+pr//2+1, ey+pr//2+1],
+                     fill=STICK_LINE)
+        # Відблиск
+        draw.ellipse([ecx-6, ey-int(er*0.55), ecx, ey-int(er*0.18)], fill=WHITE)
 
-    draw.ellipse([er_cx-er_r, ey-er_r, er_cx+er_r, ey+er_r],
-                 fill=WHITE, outline=STICK_LINE, width=3)
-    draw.ellipse([er_cx-pr_r//2+2, ey-pr_r//2, er_cx+pr_r//2+2, ey+pr_r//2+2],
-                 fill=STICK_LINE)
-    draw.ellipse([er_cx-8, ey-int(er_r*0.5), er_cx, ey-int(er_r*0.15)], fill=WHITE)
+    # ── Брови ──
+    # Нейтральна позиція: трохи вище очей
+    brow_y_norm = ey - max(er_l, er_r) - 7
 
-    # Брови
-    by = ey - max(er_l, er_r) - 3
     if emotion == 'angry':
-        draw.line([(el_cx-er_l+2, by+2), (el_cx+er_l-2, by+9)], fill=STICK_LINE, width=7)
-        draw.line([(er_cx-er_r+2, by+9), (er_cx+er_r-2, by+2)], fill=STICK_LINE, width=7)
+        # Злі: V-форма, притиснуті до очей
+        by = ey - max(er_l, er_r) - 4
+        draw.line([(el_cx-er_l+2, by+2), (el_cx+er_l-2, by+10)],
+                  fill=STICK_LINE, width=6)
+        draw.line([(er_cx-er_r+2, by+10), (er_cx+er_r-2, by+2)],
+                  fill=STICK_LINE, width=6)
+
     elif emotion == 'sad':
-        draw.line([(el_cx-er_l+2, by+9), (el_cx+er_l-2, by+2)], fill=STICK_LINE, width=7)
-        draw.line([(er_cx-er_r+2, by+2), (er_cx+er_r-2, by+9)], fill=STICK_LINE, width=7)
+        # Сумні: зовнішні кути опускаються
+        by = brow_y_norm
+        draw.line([(el_cx-er_l+2, by+10), (el_cx+er_l-2, by+2)],
+                  fill=STICK_LINE, width=6)
+        draw.line([(er_cx-er_r+2, by+2), (er_cx+er_r-2, by+10)],
+                  fill=STICK_LINE, width=6)
+
     elif emotion == 'surprised':
-        draw.arc([el_cx-er_l+2, by-10, el_cx+er_l-2, by+6], 200, 340, fill=STICK_LINE, width=6)
-        draw.arc([er_cx-er_r+2, by-10, er_cx+er_r-2, by+6], 200, 340, fill=STICK_LINE, width=6)
-    else:
-        draw.line([(el_cx-er_l+2, by+5), (el_cx+er_l-2, by)], fill=STICK_LINE, width=6)
-        draw.line([(er_cx-er_r+2, by), (er_cx+er_r-2, by+5)], fill=STICK_LINE, width=6)
+        # Здивовані: РІЗКО вгору, великий відступ від очей
+        by = ey - max(er_l, er_r) - 20  # <-- летять вгору!
+        draw.arc([el_cx-er_l+2, by-8, el_cx+er_l-2, by+10],
+                 195, 345, fill=STICK_LINE, width=6)
+        draw.arc([er_cx-er_r+2, by-8, er_cx+er_r-2, by+10],
+                 195, 345, fill=STICK_LINE, width=6)
 
-    # Ніс
+    else:  # normal / talking
+        by = brow_y_norm
+        draw.line([(el_cx-er_l+2, by+5), (el_cx+er_l-2, by)],
+                  fill=STICK_LINE, width=5)
+        draw.line([(er_cx-er_r+2, by), (er_cx+er_r-2, by+5)],
+                  fill=STICK_LINE, width=5)
+
+    # ── Ніс ──
     nx = cx + fs//2
-    draw.ellipse([nx-3, HEAD_CY+int(11*S), nx+3, HEAD_CY+int(18*S)], fill=(190,150,130))
+    draw.ellipse([nx-3, HEAD_CY+int(12*S), nx+3, HEAD_CY+int(20*S)],
+                 fill=(188,148,128))
 
-    # Рот
-    my = HEAD_CY + int(42*S)
+    # ── Рот ──
+    my = HEAD_CY + int(44*S)
+    mx_off = fs//2
+
     if emotion == 'surprised':
-        draw.ellipse([cx-int(10*S)+fs//2, my-int(11*S),
-                      cx+int(14*S)+fs//2, my+int(14*S)],
-                     fill=(180,30,30), outline=STICK_LINE, width=3)
+        # О-рот
+        draw.ellipse([cx-int(9*S)+mx_off, my-int(12*S),
+                      cx+int(13*S)+mx_off, my+int(13*S)],
+                     fill=(178,28,28), outline=STICK_LINE, width=2)
+
     elif emotion == 'angry':
-        mx1 = cx - int(22*S) + fs//2
-        mx2 = cx + int(26*S) + fs//2
-        my1, my2 = my - int(5*S), my + int(10*S)
-        draw.rectangle([mx1, my1, mx2, my2], fill=(180,30,30))
-        draw.line([(mx1, my1+4), (mx2, my1+4)], fill=WHITE, width=3)
+        # Зціплені зуби
+        mx1 = cx - int(20*S) + mx_off
+        mx2 = cx + int(24*S) + mx_off
+        my1, my2 = my-int(5*S), my+int(10*S)
+        draw.rectangle([mx1, my1, mx2, my2], fill=(178,28,28))
+        draw.line([(mx1, my1+5), (mx2, my1+5)], fill=WHITE, width=3)
         draw.rectangle([mx1, my1, mx2, my2], outline=STICK_LINE, width=3)
+
     elif emotion == 'sad':
-        draw.arc([cx-int(22*S)+fs//2, my-int(8*S),
-                  cx+int(30*S)+fs//2, my+int(16*S)],
+        # Перевернута дуга — без сліз
+        draw.arc([cx-int(20*S)+mx_off, my-int(4*S),
+                  cx+int(28*S)+mx_off, my+int(18*S)],
                  180, 360, fill=STICK_LINE, width=5)
-        for drop_cx, drop_er in [(el_cx, er_l), (er_cx, er_r)]:
-            draw.ellipse([drop_cx-4, ey+drop_er+2, drop_cx+4, ey+drop_er+11],
-                         fill=(120, 170, 255))
+
     elif emotion in ('talking', 'normal') and talking and (fi//4) % 2 == 0:
-        draw.ellipse([cx-int(26*S)+fs//2, my-int(13*S),
-                      cx+int(30*S)+fs//2, my+int(18*S)], fill=(180,30,30))
-        draw.rectangle([cx-int(18*S)+fs//2, my-int(11*S),
-                        cx+int(22*S)+fs//2, my-2], fill=WHITE)
+        # Анімований рот
+        draw.ellipse([cx-int(24*S)+mx_off, my-int(14*S),
+                      cx+int(28*S)+mx_off, my+int(18*S)], fill=(178,28,28))
+        draw.rectangle([cx-int(16*S)+mx_off, my-int(12*S),
+                        cx+int(20*S)+mx_off, my-2], fill=WHITE)
+
     else:
-        draw.arc([cx-int(22*S)+fs//2, my-int(10*S),
-                  cx+int(30*S)+fs//2, my+int(18*S)],
+        # Звичайна усмішка
+        draw.arc([cx-int(20*S)+mx_off, my-int(10*S),
+                  cx+int(28*S)+mx_off, my+int(18*S)],
                  0, 180, fill=STICK_LINE, width=5)
 
-# ─── Хвіст (Поліна) ───────────────────────────────────────────────────────────
+# ─── Хвіст Поліни ─────────────────────────────────────────────────────────────
 
 def draw_ponytail(draw, cx, facing_right):
-    HAIR_COL  = (200, 90, 30)
-    HAIR_DARK = (155, 58, 12)
-    side = -1 if facing_right else 1
-    tx   = cx + side * (HEAD_RX - 4)
-    ty   = HEAD_CY - HEAD_RY + int(12*S)
-    thick = int(16*S)
-    pts  = []
-    n    = 14
+    HAIR_COL  = (198, 88, 28)
+    HAIR_DARK = (150, 55, 10)
+    side      = -1 if facing_right else 1
+    tx        = cx + side * (HEAD_RX - 5)
+    ty        = HEAD_CY - HEAD_RY + int(14*S)
+    thick     = int(15*S)
+    n         = 14
+    pts       = []
     for i in range(n+1):
         f  = i / n
-        px = tx + side * int(f * 20*S)
-        py = ty + int((f**0.75) * 138*S)
+        px = tx + side * int(f * 22*S)
+        py = ty + int((f**0.75) * 140*S)
         pts.append((px, py))
     for i in range(len(pts)-1):
-        w = max(4, int(thick * (1 - i/n * 0.5)))
+        w = max(4, int(thick * (1 - i/n*0.5)))
         _seg(draw, *pts[i], *pts[i+1], HAIR_COL, w)
-        _seg(draw, *pts[i], *pts[i+1], HAIR_DARK, max(2, w-5))
+    # Темна обводка
+    for i in range(len(pts)-1):
+        w = max(2, int(thick*(1-i/n*0.5))-5)
+        if w > 1:
+            _seg(draw, *pts[i], *pts[i+1], HAIR_DARK, w)
     gx, gy = pts[n//2]
-    draw.ellipse([gx-5, gy-5, gx+5, gy+5], fill=(220, 50, 50))
+    draw.ellipse([gx-6, gy-6, gx+6, gy+6], fill=(215,45,45))
 
 # ─── Персонаж ─────────────────────────────────────────────────────────────────
 
@@ -565,95 +579,90 @@ def draw_char(draw, fi, cx, char_id, walking=False, facing_right=True, talking=F
     tcol  = cfg['tie']
     hair  = cfg['hair']
 
-    sway  = int(math.sin(fi * 0.04) * 2)
+    sway  = int(math.sin(fi*0.04)*2)
     cx    = cx + sway
-    swing = math.sin(fi * 0.12) * 20
-    fs    = 8 if facing_right else -8
+    swing = math.sin(fi*0.12)*20
+    fs    = int(6*S) if facing_right else -int(6*S)
     hip_w = SHIRT_W + int(14*S)
-    arm_y = NECK_Y + int(28*S)
+    arm_y = NECK_Y  + int(28*S)
 
+    # Хвіст (перед головою — голова перекриє)
     if hair == 'ponytail':
         draw_ponytail(draw, cx, facing_right)
 
-    # Руки
+    # ── Руки ──
     for side in (-1, 1):
         sw   = side if facing_right else -side
         x_sh = cx + SHIRT_W * sw
-        x_el = int(cx + SHIRT_W*sw + ARM_LEN*sw*0.45) + 5*sw
+        x_el = int(cx + SHIRT_W*sw + ARM_LEN*sw*0.45) + 4*sw
         x_h  = int(cx + SHIRT_W*sw + ARM_LEN*sw)
-        y_sh = arm_y
         y_el = int(arm_y + ARM_LEN*0.35 + swing*0.5*sw)
-        y_h  = int(arm_y + 60 + swing*sw)
-        _limb(draw, [(x_sh,y_sh),(x_el,y_el),(x_h,y_h)], STICK_LINE, SLEEVE_W)
+        y_h  = int(arm_y + 58 + swing*sw)
+        _limb(draw, [(x_sh,arm_y),(x_el,y_el),(x_h,y_h)], STICK_LINE, SLEEVE_W)
 
-    # Куртка
-    v_d  = NECK_Y + int(72*S)
-    lw_s = int(35*S)
+    # ── Куртка ──
+    v_d  = NECK_Y + int(70*S)
+    lw_s = int(34*S)
     draw.rounded_rectangle([cx-hip_w, NECK_Y+4, cx+hip_w, HIP_Y+8],
-                            radius=int(20*S), fill=jcol, outline=STICK_LINE, width=3)
-    draw.polygon([(cx-int(20*S),NECK_Y+4),(cx+int(20*S),NECK_Y+4),(cx+fs//2,v_d)], fill=WHITE)
-    draw.polygon([(cx-int(20*S),NECK_Y+4),(cx-lw_s,NECK_Y+int(28*S)),
-                  (cx-int(18*S),v_d-8),(cx+fs//2,v_d)],
+                            radius=int(18*S), fill=jcol, outline=STICK_LINE, width=3)
+    draw.polygon([(cx-int(18*S),NECK_Y+4),(cx+int(18*S),NECK_Y+4),(cx+fs//2,v_d)], fill=WHITE)
+    draw.polygon([(cx-int(18*S),NECK_Y+4),(cx-lw_s,NECK_Y+int(26*S)),
+                  (cx-int(16*S),v_d-7),(cx+fs//2,v_d)],
                  fill=jcol, outline=STICK_LINE, width=2)
-    draw.polygon([(cx+int(20*S),NECK_Y+4),(cx+lw_s,NECK_Y+int(28*S)),
-                  (cx+int(18*S),v_d-8),(cx+fs//2,v_d)],
+    draw.polygon([(cx+int(18*S),NECK_Y+4),(cx+lw_s,NECK_Y+int(26*S)),
+                  (cx+int(16*S),v_d-7),(cx+fs//2,v_d)],
                  fill=jcol, outline=STICK_LINE, width=2)
-    draw.line([(cx-int(20*S),NECK_Y+4),(cx+fs//2,v_d)], fill=STICK_LINE, width=2)
-    draw.line([(cx+int(20*S),NECK_Y+4),(cx+fs//2,v_d)], fill=STICK_LINE, width=2)
+    draw.line([(cx-int(18*S),NECK_Y+4),(cx+fs//2,v_d)], fill=STICK_LINE, width=2)
+    draw.line([(cx+int(18*S),NECK_Y+4),(cx+fs//2,v_d)], fill=STICK_LINE, width=2)
     tx_t = cx + fs//3
     draw.polygon([
         (tx_t-4,v_d-2),(tx_t+4,v_d-2),
-        (tx_t+7,v_d+int(38*S)),(tx_t,v_d+int(54*S)),(tx_t-7,v_d+int(38*S))
+        (tx_t+6,v_d+int(36*S)),(tx_t,v_d+int(52*S)),(tx_t-6,v_d+int(36*S))
     ], fill=tcol, outline=STICK_LINE, width=2)
 
-    # Ноги
+    # ── Ноги ──
     if walking:
         phase  = fi * 0.22
         dir_m  = 1 if facing_right else -1
-        stride = int(42*S)
-        lift   = int(18*S)
+        stride = int(40*S)
+        lift   = int(16*S)
         l_sw   = math.sin(phase) * stride * dir_m
         l_li   = max(0, math.sin(phase)) * lift
-        r_sw   = math.sin(phase + math.pi) * stride * dir_m
-        r_li   = max(0, math.sin(phase + math.pi)) * lift
-        lknee  = (cx - int(50*S) + int(l_sw*0.5), HIP_Y + int(88*S) - int(l_li*0.5))
-        lfoot  = (cx - int(50*S) + int(l_sw),     GROUND_Y - int(l_li))
-        rknee  = (cx + int(50*S) + int(r_sw*0.5), HIP_Y + int(88*S) - int(r_li*0.5))
-        rfoot  = (cx + int(50*S) + int(r_sw),     GROUND_Y - int(r_li))
+        r_sw   = math.sin(phase+math.pi) * stride * dir_m
+        r_li   = max(0, math.sin(phase+math.pi)) * lift
+        lknee  = (cx-int(48*S)+int(l_sw*0.5), HIP_Y+int(85*S)-int(l_li*0.5))
+        lfoot  = (cx-int(48*S)+int(l_sw),      GROUND_Y-int(l_li))
+        rknee  = (cx+int(48*S)+int(r_sw*0.5),  HIP_Y+int(85*S)-int(r_li*0.5))
+        rfoot  = (cx+int(48*S)+int(r_sw),       GROUND_Y-int(r_li))
     else:
-        lknee = (cx - int(50*S), HIP_Y + int(88*S))
-        lfoot = (cx - int(50*S), GROUND_Y)
-        rknee = (cx + int(50*S), HIP_Y + int(88*S))
-        rfoot = (cx + int(50*S), GROUND_Y)
+        lknee = (cx-int(48*S), HIP_Y+int(85*S))
+        lfoot = (cx-int(48*S), GROUND_Y)
+        rknee = (cx+int(48*S), HIP_Y+int(85*S))
+        rfoot = (cx+int(48*S), GROUND_Y)
 
-    lhip = (cx - hip_w//2, HIP_Y + 6)
-    rhip = (cx + hip_w//2, HIP_Y + 6)
-    _limb(draw, [lhip, lknee], STICK_LINE, LEG_W)
-    _limb(draw, [lknee, lfoot], STICK_LINE, LEG_W)
-    _limb(draw, [rhip, rknee], STICK_LINE, LEG_W)
-    _limb(draw, [rknee, rfoot], STICK_LINE, LEG_W)
-
-    shoe  = int(36*S)
-    r_sh  = int(5*S)
-    draw.rounded_rectangle([lfoot[0]-shoe, lfoot[1]-4, lfoot[0]+shoe//3, lfoot[1]+9],
+    lhip = (cx-hip_w//2, HIP_Y+6)
+    rhip = (cx+hip_w//2, HIP_Y+6)
+    _limb(draw, [lhip,lknee], STICK_LINE, LEG_W)
+    _limb(draw, [lknee,lfoot], STICK_LINE, LEG_W)
+    _limb(draw, [rhip,rknee], STICK_LINE, LEG_W)
+    _limb(draw, [rknee,rfoot], STICK_LINE, LEG_W)
+    shoe  = int(34*S)
+    r_sh  = max(3, int(4*S))
+    draw.rounded_rectangle([lfoot[0]-shoe, lfoot[1]-5, lfoot[0]+shoe//3, lfoot[1]+10],
                             radius=r_sh, fill=STICK_LINE)
-    draw.rounded_rectangle([rfoot[0]-shoe//3, rfoot[1]-4, rfoot[0]+shoe, rfoot[1]+9],
+    draw.rounded_rectangle([rfoot[0]-shoe//3, rfoot[1]-5, rfoot[0]+shoe, rfoot[1]+10],
                             radius=r_sh, fill=STICK_LINE)
 
-    # Голова
+    # ── Голова — чиста, без тіні ──
     draw.ellipse([cx-HEAD_RX, HEAD_CY-HEAD_RY, cx+HEAD_RX, HEAD_CY+HEAD_RY],
-                 fill=(195,200,210), outline=STICK_LINE, width=LW)
-    shift = int(18*S) if facing_right else -int(18*S)
-    draw.ellipse([cx-HEAD_RX+shift, HEAD_CY-HEAD_RY+4,
-                  cx+HEAD_RX+int(shift*0.15), HEAD_CY+HEAD_RY-4], fill=WHITE)
-    draw.ellipse([cx-HEAD_RX, HEAD_CY-HEAD_RY, cx+HEAD_RX, HEAD_CY+HEAD_RY],
-                 outline=STICK_LINE, width=LW)
+                 fill=WHITE, outline=STICK_LINE, width=LW)
 
+    # ── Обличчя ──
     draw_face(draw, fi, cx, facing_right, emotion, talking)
 
 # ─── Хмаринка діалогу ─────────────────────────────────────────────────────────
 
-def wrap_text(text, max_chars=13):
+def wrap_text(text, max_chars=18):
     words, lines, line = text.split(), [], ''
     for w in words:
         test = (line + ' ' + w).strip()
@@ -668,24 +677,24 @@ def wrap_text(text, max_chars=13):
 
 def draw_bubble(draw, text, font, cx, slot_i, n_slots):
     lines  = wrap_text(text) or ['...']
-    line_h = 30
-    pad    = 11
-    bub_w  = min(185, W // max(n_slots, 1) + 40)
-    bx1    = max(5, cx - bub_w//2)
-    bx2    = min(W-5, bx1 + bub_w)
-    if bx2 - bx1 < 80:
-        bx1 = max(5, bx2-80)
-    by1    = 16
-    by2    = by1 + len(lines)*line_h + pad*2
+    line_h = 38
+    pad    = 14
 
-    draw.rounded_rectangle([bx1+3, by1+3, bx2+3, by2+3], radius=13, fill=(160,160,160))
-    draw.rounded_rectangle([bx1, by1, bx2, by2], radius=13,
+    bub_w = min(340, W // max(n_slots, 1) + 100)
+    bx1   = max(8, cx - bub_w//2)
+    bx2   = min(W-8, bx1 + bub_w)
+    if bx2-bx1 < 100: bx1 = max(8, bx2-100)
+    by1   = 18
+    by2   = by1 + len(lines)*line_h + pad*2
+
+    draw.rounded_rectangle([bx1+4, by1+4, bx2+4, by2+4], radius=15, fill=(148,148,148))
+    draw.rounded_rectangle([bx1, by1, bx2, by2], radius=15,
                             fill=BUBBLE_BG, outline=BUBBLE_BD, width=3)
-    tail_y  = HEAD_CY - HEAD_RY - 4
-    mid_bub = (bx1 + bx2) // 2
-    draw.polygon([(mid_bub-8,by2),(mid_bub+8,by2),(cx,tail_y)], fill=BUBBLE_BG)
-    draw.line([(mid_bub-8,by2),(cx,tail_y)], fill=BUBBLE_BD, width=2)
-    draw.line([(mid_bub+8,by2),(cx,tail_y)], fill=BUBBLE_BD, width=2)
+    tail_y  = HEAD_CY - HEAD_RY - 5
+    mid_bub = (bx1+bx2)//2
+    draw.polygon([(mid_bub-10,by2),(mid_bub+10,by2),(cx,tail_y)], fill=BUBBLE_BG)
+    draw.line([(mid_bub-10,by2),(cx,tail_y)], fill=BUBBLE_BD, width=2)
+    draw.line([(mid_bub+10,by2),(cx,tail_y)], fill=BUBBLE_BD, width=2)
     ty    = by1 + pad
     mid_x = (bx1+bx2)//2
     for line in lines:
@@ -699,25 +708,25 @@ def render_scene(scene_def, scene_idx, initial_chars, work_dir):
     draw_bg = BG.get(bg_key, bg_street)
 
     entering_list = scene_def.get('enter', [])
-    entering_dict = {e['char']: e.get('from', 'left') for e in entering_list}
+    entering_dict = {e['char']: e.get('from','left') for e in entering_list}
     exiting_set   = {e['char'] for e in scene_def.get('exit', [])}
 
     present        = set(initial_chars.keys()) | set(entering_dict.keys())
     sorted_present = sorted(present)
     slots          = slot_positions(len(sorted_present))
-    char_targets   = {cid: slots[i] for i, cid in enumerate(sorted_present)}
+    char_targets   = {cid: slots[i] for i,cid in enumerate(sorted_present)}
 
     char_starts   = {}
     arrival_times = {}
     for cid, side in entering_dict.items():
-        start_x = -HEAD_RX*3 if side == 'left' else W + HEAD_RX*3
+        start_x = -HEAD_RX*3 if side=='left' else W+HEAD_RX*3
         char_starts[cid]   = start_x
-        arrival_times[cid] = abs(char_targets[cid] - start_x) / WALK_SPEED
+        arrival_times[cid] = abs(char_targets[cid]-start_x) / WALK_SPEED
     for cid in initial_chars:
         start_x = initial_chars[cid]
         char_starts[cid]   = start_x
-        dist = abs(char_targets[cid] - start_x)
-        arrival_times[cid] = dist / WALK_SPEED if dist > 5 else 0.0
+        dist = abs(char_targets[cid]-start_x)
+        arrival_times[cid] = dist/WALK_SPEED if dist>5 else 0.0
 
     enter_end = max(arrival_times.values()) if arrival_times else 0.0
 
@@ -743,15 +752,15 @@ def render_scene(scene_def, scene_idx, initial_chars, work_dir):
     exit_start  = dialogs_end + 0.2
     exit_data   = {}
     for cid in exiting_set:
-        from_x = char_targets.get(cid, 240)
+        from_x = char_targets.get(cid, W//2)
         to_x   = W + HEAD_RX*3
-        dur    = abs(to_x - from_x) / WALK_SPEED
+        dur    = abs(to_x-from_x)/WALK_SPEED
         exit_data[cid] = (from_x, to_x, dur)
 
-    exit_end     = (exit_start + max(d[2] for d in exit_data.values())) if exit_data else exit_start
+    exit_end     = (exit_start+max(d[2] for d in exit_data.values())) if exit_data else exit_start
     total_dur    = exit_end + 0.4
     total_frames = int(total_dur * FPS)
-    font         = load_font(21)
+    font         = load_font(28)
 
     silent = os.path.join(work_dir, f'sil_{scene_idx}.mp4')
     cmd = [
@@ -774,41 +783,41 @@ def render_scene(scene_def, scene_idx, initial_chars, work_dir):
                 if dt_s <= t_cur <= dt_e:
                     talking_char = dlg['char']
                     bubble_text  = dlg['text']
-                    bubble_emot  = dlg.get('emotion', 'normal')
+                    bubble_emot  = dlg.get('emotion','normal')
                     break
 
-            img  = Image.new('RGB', (W, H))
+            img  = Image.new('RGB', (W,H))
             draw = ImageDraw.Draw(img)
             draw_bg(draw, fi)
 
-            for char_id in sorted(present, key=lambda c: char_targets.get(c, 240)):
+            for char_id in sorted(present, key=lambda c: char_targets.get(c, W//2)):
                 target_x = char_targets[char_id]
                 start_x  = char_starts[char_id]
                 arr_t    = arrival_times.get(char_id, 0.0)
 
                 if char_id in exiting_set and t_cur >= exit_start:
                     from_x, to_x, edur = exit_data[char_id]
-                    prog         = min(1.0, (t_cur-exit_start)/edur) if edur > 0 else 1.0
-                    cx_f         = from_x + (to_x-from_x)*prog
+                    prog         = min(1.0,(t_cur-exit_start)/edur) if edur>0 else 1.0
+                    cx_f         = from_x+(to_x-from_x)*prog
                     walking      = prog < 0.999
                     facing_right = True
                     emo          = 'normal'
                 elif arr_t > 0 and t_cur < arr_t:
-                    prog         = t_cur / arr_t
-                    cx_f         = start_x + (target_x-start_x)*prog
+                    prog         = t_cur/arr_t
+                    cx_f         = start_x+(target_x-start_x)*prog
                     walking      = True
                     facing_right = target_x > start_x
                     emo          = 'normal'
                 else:
                     cx_f    = float(target_x)
                     walking = False
-                    if talking_char >= 0 and talking_char != char_id and talking_char in char_targets:
+                    if talking_char>=0 and talking_char!=char_id and talking_char in char_targets:
                         facing_right = char_targets[talking_char] > target_x
                     elif char_id in entering_dict:
                         facing_right = entering_dict[char_id] == 'left'
                     else:
                         facing_right = target_x <= W//2
-                    emo = bubble_emot if char_id == talking_char else 'normal'
+                    emo = bubble_emot if char_id==talking_char else 'normal'
 
                 if cx_f < -HEAD_RX*2 or cx_f > W+HEAD_RX*2:
                     continue
@@ -832,7 +841,7 @@ def render_scene(scene_def, scene_idx, initial_chars, work_dir):
         inputs_cmd   = []
         filter_parts = []
         for i, path in enumerate(audio_paths):
-            delay_ms = int(dialog_times[i][0] * 1000)
+            delay_ms = int(dialog_times[i][0]*1000)
             inputs_cmd += ['-i', path]
             filter_parts.append(f'[{i}:a]adelay={delay_ms}|{delay_ms}[a{i}]')
         mix_str = ''.join(f'[a{i}]' for i in range(len(audio_paths)))
