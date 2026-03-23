@@ -407,7 +407,14 @@ bot.on('interactionCreate', async (interaction) => {
 
   const tema = interaction.options.getString('тема');
   const cmd = interaction.commandName;
-  await interaction.deferReply();
+
+  // Discord дає 3 секунди на відповідь — якщо протухло (рестарт Railway) — просто ігноруємо
+  try {
+    await interaction.deferReply();
+  } catch (e) {
+    console.error(`⚠️ deferReply failed (interaction expired): ${e.message}`);
+    return;
+  }
 
   if (cmd === 'shorts') {
     // ── ShortsManager субагент ──
