@@ -197,68 +197,188 @@ def bg_street(draw, fi):
     draw_cloud(draw, 700-off, 50, 42)
     draw_cloud(draw, 1050-off, 95, 52)
 
+def draw_pine_tree(draw, tx, ty, h=100, w=62):
+    """Смерека South Park стиль — 3 шари трикутників."""
+    trunk_h = int(h * 0.20)
+    # Стовбур
+    draw.rectangle([tx-5, ty-trunk_h, tx+5, ty], fill=(95, 58, 24))
+    # 3 шари крони (знизу широкий → вгорі вузький)
+    for layer in range(3):
+        f   = layer / 2.0
+        lw  = int(w * (1.0 - f * 0.38))
+        base_y = ty - trunk_h - int(h * 0.50 * f)
+        top_y  = base_y - int(h * (0.50 - f * 0.12))
+        gcol   = (32 + layer*14, 82 + layer*22, 32 + layer*12)
+        draw.polygon([
+            (tx - lw//2, base_y),
+            (tx + lw//2, base_y),
+            (tx, top_y),
+        ], fill=gcol, outline=(18, 52, 18), width=1)
+
+
+def draw_building_sp(draw, fi, bx, sw_top, bw, bh, color, style='flat'):
+    """Будівля South Park стиль: теплі кольори, вікна з рамами, двері, дах."""
+    by   = sw_top - bh
+    dark = tuple(max(0, c - 48) for c in color)
+    mid  = tuple(max(0, c - 22) for c in color)
+
+    # Тінь
+    draw.rectangle([bx+5, by+5, bx+bw+5, sw_top+5], fill=(65, 65, 68))
+
+    # Основне тіло
+    draw.rectangle([bx, by, bx+bw, sw_top], fill=color)
+    draw.line([(bx, by), (bx+bw, by)],       fill=dark, width=3)
+    draw.line([(bx, by), (bx, sw_top)],       fill=mid,  width=2)
+    draw.line([(bx+bw, by), (bx+bw, sw_top)], fill=dark, width=2)
+
+    # Дах
+    if style == 'peaked':
+        peak_h = int(bw * 0.30)
+        roof_col = tuple(max(0, c - 55) for c in color)
+        draw.polygon([
+            (bx - 4,    by + 4),
+            (bx + bw+4, by + 4),
+            (bx + bw//2, by - peak_h),
+        ], fill=roof_col, outline=dark, width=2)
+        # Труба
+        cx_ch = bx + bw // 3
+        draw.rectangle([cx_ch-7, by-peak_h+8, cx_ch+7, by-peak_h+36], fill=dark)
+        draw.rectangle([cx_ch-9, by-peak_h+6, cx_ch+9, by-peak_h+14], fill=mid)
+    else:
+        # Плаский дах — парапет
+        draw.rectangle([bx-2, by-10, bx+bw+2, by+4], fill=mid)
+        draw.line([(bx-2, by-10), (bx+bw+2, by-10)], fill=dark, width=2)
+        # Труба
+        cx_ch = bx + bw * 3 // 4
+        draw.rectangle([cx_ch-7, by-32, cx_ch+7, by-8], fill=dark)
+        draw.rectangle([cx_ch-9, by-34, cx_ch+9, by-26], fill=mid)
+
+    # Вікна з хрестоподібними рамами
+    win_w, win_h = 32, 40
+    gap_x, gap_y = 16, 22
+    cols = max(1, (bw - 28) // (win_w + gap_x))
+    total_wx = cols * win_w + (cols-1) * gap_x
+    wx0  = bx + (bw - total_wx) // 2
+    rows = min(4, (bh - 68) // (win_h + gap_y))
+
+    for row in range(rows):
+        wy = by + 22 + row * (win_h + gap_y)
+        for col in range(cols):
+            wx = wx0 + col * (win_w + gap_x)
+            # Рама
+            draw.rectangle([wx-3, wy-3, wx+win_w+3, wy+win_h+3], fill=dark)
+            # Скло
+            lit = (fi // 38 + col*3 + row*7) % 6 != 0
+            wc  = (205, 225, 248) if lit else (52, 62, 78)
+            draw.rectangle([wx, wy, wx+win_w, wy+win_h], fill=wc)
+            # Хрест рами
+            draw.line([(wx+win_w//2, wy), (wx+win_w//2, wy+win_h)],
+                      fill=dark, width=2)
+            draw.line([(wx, wy+win_h//2), (wx+win_w, wy+win_h//2)],
+                      fill=dark, width=2)
+            # Підвіконня
+            draw.rectangle([wx-4, wy+win_h+2, wx+win_w+4, wy+win_h+6],
+                            fill=mid)
+
+    # Двері
+    dw, dh = 28, 46
+    dx = bx + bw//2 - dw//2
+    dy = sw_top - dh
+    draw.rectangle([dx, dy, dx+dw, sw_top], fill=(65, 40, 18))
+    draw.rounded_rectangle([dx+2, dy+2, dx+dw-2, dy+dh//2+6],
+                            radius=10, fill=(88, 55, 26))
+    draw.ellipse([dx+dw-9, dy+dh//2+2, dx+dw-3, dy+dh//2+10],
+                 fill=(195, 162, 48))
+    # Козирок
+    draw.polygon([
+        (dx-14, dy-2), (dx+dw+14, dy-2),
+        (dx+dw+8, dy+12), (dx-8, dy+12),
+    ], fill=dark)
+
+
 def bg_city(draw, fi):
-    """Місто з будівлями, тротуаром і рухомими машинами."""
-    # Небо
-    draw.rectangle([(0,0),(W, GROUND_Y-80)], fill=(158, 198, 232))
+    """Місто South Park стиль: гори, кольорові будівлі, смереки, машини."""
+    sw_top = GROUND_Y - 80   # верх тротуару = 480
 
-    # Будинки (14 штук по всій ширині 1280px)
-    bldgs = [
-        (   0, 250, 95,  (142,144,154)),
-        (  90, 200, 82,  (132,138,148)),
-        ( 168, 310, 100, (152,148,142)),
-        ( 263, 220, 88,  (138,144,152)),
-        ( 346, 280, 106, (148,142,148)),
-        ( 447, 190, 80,  (144,148,138)),
-        ( 522, 340, 110, (150,146,140)),
-        ( 627, 240, 92,  (136,142,150)),
-        ( 714, 300, 100, (146,142,155)),
-        ( 809, 210, 88,  (140,148,142)),
-        ( 892, 270, 98,  (144,140,152)),
-        ( 985, 320, 102, (150,145,140)),
-        (1082, 230, 94,  (138,144,148)),
-        (1171, 260, 109, (148,150,144)),
+    # 1. Небо
+    draw.rectangle([(0, 0), (W, sw_top)], fill=(152, 195, 232))
+
+    # 2. Гори на горизонті (зелені пагорби + сніжні вершини)
+    hill_pts = [
+        (0, sw_top), (0, 360),
+        (90, 235), (195, 345), (305, 188),
+        (445, 322), (545, 215), (665, 355),
+        (755, 225), (875, 318),
+        (968, 195), (1085, 340),
+        (1162, 238), (1280, 305),
+        (1280, sw_top),
     ]
-    sw_top = GROUND_Y - 80   # верх тротуару
-    for bx, bh, bw, bcol in bldgs:
-        by = sw_top - bh
-        draw.rectangle([bx, by, bx+bw, sw_top], fill=bcol)
-        draw.line([(bx,by),(bx+bw,by)], fill=(100,104,112), width=2)
-        draw.line([(bx,by),(bx,sw_top)], fill=(110,112,120), width=1)
-        draw.line([(bx+bw,by),(bx+bw,sw_top)], fill=(110,112,120), width=1)
-        # Вікна
-        for wy in range(by+10, sw_top-12, 30):
-            for wx in range(bx+8, bx+bw-10, 24):
-                lit = (fi//30 + wx//18 + wy//25) % 4 != 0
-                wc  = (255,235,148) if lit else (68,72,82)
-                draw.rectangle([wx, wy, wx+14, wy+18], fill=wc)
+    # Тінь пагорбів
+    shadow_pts = [(x, y+8) for x, y in hill_pts]
+    draw.polygon(shadow_pts, fill=(78, 105, 82))
+    # Пагорби
+    draw.polygon(hill_pts, fill=(88, 128, 88))
+    # Снігові шапки
+    snow_peaks = [(305,188),(545,215),(755,225),(968,195),(1162,238)]
+    for px, py in snow_peaks:
+        draw.polygon([(px-26, py+38), (px+26, py+38), (px, py)],
+                     fill=(235, 240, 250))
 
-    # Тротуар
-    draw.rectangle([(0, sw_top),(W, GROUND_Y)], fill=(185,180,174))
-    draw.line([(0,sw_top),(W,sw_top)], fill=(155,150,144), width=2)
-    for tx in range(0, W, 48):
-        draw.line([(tx,sw_top),(tx,GROUND_Y)], fill=(168,163,157), width=1)
-    for ty_t in range(sw_top+24, GROUND_Y, 24):
-        draw.line([(0,ty_t),(W,ty_t)], fill=(168,163,157), width=1)
+    # 3. Хмари (невеликі, над горами)
+    off = int(fi * 0.32) % (W + 200)
+    draw_cloud(draw, 240-off, 80, 48)
+    draw_cloud(draw, 650-off, 55, 36)
+    draw_cloud(draw, 1050-off, 70, 44)
 
-    # Дорога
-    draw.rectangle([(0,GROUND_Y),(W,H)], fill=(72,72,76))
-    # Розмітка
-    dash, gap = 50, 35
+    # 4. Будівлі South Park стиль (7 штук, теплі кольори)
+    # (bx, bw, bh, color, style)
+    buildings = [
+        (   0, 192, 295, (192, 162, 128), 'peaked'),   # беж
+        ( 186, 170, 225, (168,  68,  62), 'peaked'),   # червоний
+        ( 350, 192, 328, ( 68,  98, 142), 'flat'),     # синій
+        ( 536, 215, 258, (128, 152,  96), 'peaked'),   # оливковий
+        ( 745, 180, 290, (152, 118,  80), 'flat'),     # коричневий
+        ( 918, 194, 265, (178,  98,  75), 'flat'),     # теракотовий
+        (1105, 175, 245, (208, 198, 175), 'peaked'),   # кремовий
+    ]
+    for bx, bw, bh, col, style in buildings:
+        draw_building_sp(draw, fi, bx, sw_top, bw, bh, col, style)
+
+    # 5. Смереки між будівлями (South Park характерні дерева)
+    pine_positions = [182, 346, 532, 741, 914, 1101]
+    for tx in pine_positions:
+        draw_pine_tree(draw, tx, sw_top, h=118, w=68)
+
+    # 6. Тротуар
+    draw.rectangle([(0, sw_top), (W, GROUND_Y)], fill=(182, 177, 170))
+    draw.line([(0, sw_top), (W, sw_top)], fill=(152, 147, 140), width=2)
+    for tx in range(0, W, 55):
+        draw.line([(tx, sw_top), (tx, GROUND_Y)], fill=(165, 160, 153), width=1)
+    for ty_t in range(sw_top+28, GROUND_Y, 28):
+        draw.line([(0, ty_t), (W, ty_t)], fill=(165, 160, 153), width=1)
+
+    # Бордюр
+    draw.rectangle([(0, GROUND_Y-8), (W, GROUND_Y+4)], fill=(115, 110, 105))
+
+    # 7. Дорога (2 смуги)
+    draw.rectangle([(0, GROUND_Y), (W, H)], fill=(65, 65, 68))
+
+    # Розмітка між смугами
+    dash, gap = 58, 42
     total_d   = dash + gap
-    off_d     = int(fi * 3.5) % total_d
-    lane_y    = GROUND_Y + 80
-    for x in range(-total_d, W+total_d, total_d):
+    off_d     = int(fi * 4.2) % total_d
+    lane_y    = GROUND_Y + 78
+    for x in range(-total_d, W + total_d, total_d):
         xs = x - off_d
-        draw.rectangle([xs, lane_y-4, xs+dash, lane_y+4], fill=(255,255,100))
+        draw.rectangle([xs, lane_y-5, xs+dash, lane_y+5], fill=(255, 255, 100))
 
-    # Машини (3 штуки)
-    c1x = W + 160 - int(fi * 2.8) % (W + 320)
-    c2x = int(fi * 2.0) % (W + 320) - 160
-    c3x = W//2 + 320 - int(fi * 1.5) % (W + 320)
-    draw_car(draw, c1x, GROUND_Y+55,  (205, 58, 58),  facing_right=False, cw=108, ch=42)
-    draw_car(draw, c2x, GROUND_Y+110, (58, 108, 210), facing_right=True,  cw=108, ch=42)
-    draw_car(draw, c3x, GROUND_Y+55,  (58, 185, 85),  facing_right=False, cw=100, ch=38)
+    # 8. Машини (великі, South Park пропорції)
+    c1x = W + 200 - int(fi * 3.2) % (W + 400)
+    c2x = int(fi * 2.5) % (W + 400) - 200
+    c3x = W // 3 + 260 - int(fi * 1.8) % (W + 400)
+    draw_car(draw, c1x, GROUND_Y + 52,  (198, 52, 52),  facing_right=False, cw=158, ch=54)
+    draw_car(draw, c2x, GROUND_Y + 120, (52, 102, 202), facing_right=True,  cw=158, ch=54)
+    draw_car(draw, c3x, GROUND_Y + 52,  (52, 175, 75),  facing_right=False, cw=148, ch=50)
 
 def bg_park(draw, fi):
     """Парк з деревами, лавкою, доріжкою."""
