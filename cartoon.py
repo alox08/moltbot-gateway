@@ -875,17 +875,20 @@ def render_scene(scene_def, scene_idx, initial_chars, work_dir):
     slots          = slot_positions(len(sorted_present))
     char_targets   = {cid: slots[i] for i,cid in enumerate(sorted_present)}
 
+    # South Park стиль: персонажі з'являються миттєво (pop-in)
+    # Ті що вже були — можуть перейти на нову позицію якщо слот змінився
     char_starts   = {}
     arrival_times = {}
-    for cid, side in entering_dict.items():
-        start_x = -HEAD_RX*3 if side=='left' else W+HEAD_RX*3
-        char_starts[cid]   = start_x
-        arrival_times[cid] = abs(char_targets[cid]-start_x) / WALK_SPEED
+    for cid in entering_dict:
+        # Нові персонажі — pop-in одразу на слот
+        char_starts[cid]   = char_targets[cid]
+        arrival_times[cid] = 0.0
     for cid in initial_chars:
         start_x = initial_chars[cid]
         char_starts[cid]   = start_x
-        dist = abs(char_targets[cid]-start_x)
-        arrival_times[cid] = dist/WALK_SPEED if dist>5 else 0.0
+        dist = abs(char_targets[cid] - start_x)
+        # Якщо треба перейти — коротка пробіжка (не більше 0.6с)
+        arrival_times[cid] = min(dist / WALK_SPEED, 0.6) if dist > 10 else 0.0
 
     enter_end = max(arrival_times.values()) if arrival_times else 0.0
 
@@ -913,14 +916,10 @@ def render_scene(scene_def, scene_idx, initial_chars, work_dir):
 
     dialogs_end = dialog_times[-1][1] if dialog_times else (enter_end+0.3)
     exit_start  = dialogs_end + 0.2
-    exit_data   = {}
-    for cid in exiting_set:
-        from_x = char_targets.get(cid, W//2)
-        to_x   = W + HEAD_RX*3
-        dur    = abs(to_x-from_x)/WALK_SPEED
-        exit_data[cid] = (from_x, to_x, dur)
-
-    exit_end     = (exit_start+max(d[2] for d in exit_data.values())) if exit_data else exit_start
+    # South Park: персонажі зникають миттєво (pop-out)
+    exit_data = {cid: (char_targets.get(cid, W//2), char_targets.get(cid, W//2), 0.0)
+                 for cid in exiting_set}
+    exit_end  = exit_start  # миттєво — не додає часу
     total_dur    = exit_end + 0.4
     total_frames = int(total_dur * FPS)
     font         = load_font(28)
@@ -974,12 +973,8 @@ def render_scene(scene_def, scene_idx, initial_chars, work_dir):
                 facing_camera = False
 
                 if char_id in exiting_set and t_cur >= exit_start:
-                    from_x, to_x, edur = exit_data[char_id]
-                    prog         = min(1.0,(t_cur-exit_start)/edur) if edur>0 else 1.0
-                    cx_f         = from_x+(to_x-from_x)*prog
-                    walking      = prog < 0.999
-                    facing_right = True
-                    emo          = 'normal'
+                    # Pop-out: просто не малюємо персонажа
+                    continue
                 elif arr_t > 0 and t_cur < arr_t:
                     prog         = t_cur/arr_t
                     cx_f         = start_x+(target_x-start_x)*prog
