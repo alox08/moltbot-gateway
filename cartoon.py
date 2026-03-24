@@ -545,32 +545,43 @@ BG = {
 
 # ─── Обличчя ──────────────────────────────────────────────────────────────────
 
-def draw_face(draw, fi, cx, facing_right, emotion, talking):
+def draw_face(draw, fi, cx, facing_right, emotion, talking, facing_camera=False):
     """
     Чисте обличчя без тіні — Loading Artist стиль.
     Емоції: normal, talking, surprised, angry, sad
+    facing_camera=True — симетричне обличчя прямо в камеру
     """
-    fs  = int(6*S) if facing_right else -int(6*S)
-    ey  = HEAD_CY - int(10*S)
-
-    # ── Розміри очей ──
-    if facing_right:
-        el_cx = cx - int(24*S) + fs
-        er_cx = cx + int(38*S) + fs//2
+    if facing_camera:
+        fs    = 0
+        ey    = HEAD_CY - int(10*S)
+        el_cx = cx - int(28*S)
+        er_cx = cx + int(28*S)
+        er_l  = int(25*S)
+        pr_l  = int(14*S)
+        er_r  = int(25*S)
+        pr_r  = int(14*S)
     else:
-        el_cx = cx - int(38*S) + fs//2
-        er_cx = cx + int(24*S) + fs
+        fs  = int(6*S) if facing_right else -int(6*S)
+        ey  = HEAD_CY - int(10*S)
 
-    # Базові радіуси (без EYE_SCALE)
-    er_l  = int(22*S)
-    pr_l  = int(12*S)
-    er_r  = int(28*S)
-    pr_r  = int(16*S)
+        # ── Розміри очей ──
+        if facing_right:
+            el_cx = cx - int(24*S) + fs
+            er_cx = cx + int(38*S) + fs//2
+        else:
+            el_cx = cx - int(38*S) + fs//2
+            er_cx = cx + int(24*S) + fs
 
-    # Зробити ліве/праве правильно при повороті
-    if not facing_right:
-        er_l, er_r = er_r, er_l
-        pr_l, pr_r = pr_r, pr_l
+        # Базові радіуси (без EYE_SCALE)
+        er_l  = int(22*S)
+        pr_l  = int(12*S)
+        er_r  = int(28*S)
+        pr_r  = int(16*S)
+
+        # Зробити ліве/праве правильно при повороті
+        if not facing_right:
+            er_l, er_r = er_r, er_l
+            pr_l, pr_r = pr_r, pr_l
 
     # Surprised — злегка більші очі
     if emotion == 'surprised':
@@ -590,7 +601,12 @@ def draw_face(draw, fi, cx, facing_right, emotion, talking):
     # Нейтральна позиція: трохи вище очей
     brow_y_norm = ey - max(er_l, er_r) - 7
 
-    if emotion == 'angry':
+    if facing_camera and emotion not in ('angry', 'sad', 'surprised'):
+        # Рівні симетричні брови для "в камеру"
+        by = brow_y_norm
+        draw.line([(el_cx-er_l+2, by+3), (el_cx+er_l-2, by+3)], fill=STICK_LINE, width=5)
+        draw.line([(er_cx-er_r+2, by+3), (er_cx+er_r-2, by+3)], fill=STICK_LINE, width=5)
+    elif emotion == 'angry':
         # Злі: V-форма, притиснуті до очей
         by = ey - max(er_l, er_r) - 4
         draw.line([(el_cx-er_l+2, by+2), (el_cx+er_l-2, by+10)],
@@ -693,7 +709,7 @@ def draw_ponytail(draw, cx, facing_right):
 
 # ─── Персонаж ─────────────────────────────────────────────────────────────────
 
-def draw_char(draw, fi, cx, char_id, walking=False, facing_right=True, talking=False, emotion='normal'):
+def draw_char(draw, fi, cx, char_id, walking=False, facing_right=True, talking=False, emotion='normal', gesture=None, facing_camera=False):
     cfg   = CHAR_CFG[char_id % len(CHAR_CFG)]
     jcol  = cfg['jacket']
     tcol  = cfg['tie']
@@ -711,13 +727,36 @@ def draw_char(draw, fi, cx, char_id, walking=False, facing_right=True, talking=F
         draw_ponytail(draw, cx, facing_right)
 
     # ── Руки ──
+    front_sw = 1 if facing_right else -1  # сторона "вперед" відносно напрямку
     for side in (-1, 1):
         sw   = side if facing_right else -side
         x_sh = cx + SHIRT_W * sw
-        x_el = int(cx + SHIRT_W*sw + ARM_LEN*sw*0.45) + 4*sw
-        x_h  = int(cx + SHIRT_W*sw + ARM_LEN*sw)
-        y_el = int(arm_y + ARM_LEN*0.35 + swing*0.5*sw)
-        y_h  = int(arm_y + 58 + swing*sw)
+
+        if emotion == 'surprised':
+            # Обидві руки вгору — здивування
+            x_el = int(cx + SHIRT_W*sw + ARM_LEN*sw*0.2)
+            x_h  = int(cx + SHIRT_W*sw*0.3)
+            y_el = int(arm_y - ARM_LEN*0.25)
+            y_h  = int(arm_y - ARM_LEN*0.85)
+        elif emotion == 'angry':
+            # Руки розкидані в сторони — злість
+            x_el = int(cx + SHIRT_W*sw + ARM_LEN*sw*0.65)
+            x_h  = int(cx + SHIRT_W*sw + ARM_LEN*sw*1.1)
+            y_el = int(arm_y + ARM_LEN*0.15)
+            y_h  = int(arm_y - ARM_LEN*0.15)
+        elif gesture == 'explain' and sw == front_sw:
+            # Передня рука вгору — жест пояснення/аргумент
+            x_el = int(cx + SHIRT_W*sw + ARM_LEN*sw*0.25)
+            x_h  = int(cx + SHIRT_W*sw*0.6)
+            y_el = int(arm_y - ARM_LEN*0.15)
+            y_h  = int(arm_y - ARM_LEN*0.80)
+        else:
+            # Звичайне положення — руки звисають + гойдання
+            x_el = int(cx + SHIRT_W*sw + ARM_LEN*sw*0.45) + 4*sw
+            x_h  = int(cx + SHIRT_W*sw + ARM_LEN*sw)
+            y_el = int(arm_y + ARM_LEN*0.35 + swing*0.5*sw)
+            y_h  = int(arm_y + 58 + swing*sw)
+
         _limb(draw, [(x_sh,arm_y),(x_el,y_el),(x_h,y_h)], STICK_LINE, SLEEVE_W)
 
     # ── Куртка ──
@@ -778,7 +817,7 @@ def draw_char(draw, fi, cx, char_id, walking=False, facing_right=True, talking=F
                  fill=WHITE, outline=STICK_LINE, width=LW)
 
     # ── Обличчя ──
-    draw_face(draw, fi, cx, facing_right, emotion, talking)
+    draw_face(draw, fi, cx, facing_right, emotion, talking, facing_camera=facing_camera)
 
 # ─── Хмаринка діалогу ─────────────────────────────────────────────────────────
 
@@ -850,17 +889,21 @@ def render_scene(scene_def, scene_idx, initial_chars, work_dir):
 
     enter_end = max(arrival_times.values()) if arrival_times else 0.0
 
-    # Аудіо
+    # Аудіо (beat = тиша без TTS)
     dialogs     = scene_def.get('dialogs', [])
     audio_paths = []
     audio_durs  = []
     for i, dlg in enumerate(dialogs):
-        cid   = dlg['char']
-        voice = CHAR_CFG[cid % len(CHAR_CFG)]['voice']
-        path  = os.path.join(work_dir, f'd_{scene_idx}_{i}.mp3')
-        asyncio.run(gen_audio(dlg['text'], voice, path))
-        audio_paths.append(path)
-        audio_durs.append(get_duration(path))
+        if 'beat' in dlg:
+            audio_paths.append(None)
+            audio_durs.append(float(dlg['beat']))
+        else:
+            cid   = dlg['char']
+            voice = CHAR_CFG[cid % len(CHAR_CFG)]['voice']
+            path  = os.path.join(work_dir, f'd_{scene_idx}_{i}.mp3')
+            asyncio.run(gen_audio(dlg['text'], voice, path))
+            audio_paths.append(path)
+            audio_durs.append(get_duration(path))
 
     dialog_times = []
     t = enter_end + 0.3
@@ -894,19 +937,31 @@ def render_scene(scene_def, scene_idx, initial_chars, work_dir):
     proc = subprocess.Popen(cmd, stdin=subprocess.PIPE)
     try:
         for fi in range(total_frames):
-            t_cur        = fi / FPS
-            talking_char = -1
-            bubble_text  = ''
-            bubble_emot  = 'normal'
+            t_cur = fi / FPS
+
+            # ── Визначаємо активний діалог / beat ──
+            talking_char  = -1
+            bubble_text   = ''
+            bubble_emot   = 'normal'
+            beat_emotions = {}   # char_id -> emotion під час beat
+            current_dlg   = None
+
             for di, dlg in enumerate(dialogs):
                 dt_s, dt_e = dialog_times[di]
                 if dt_s <= t_cur <= dt_e:
-                    talking_char = dlg['char']
-                    bubble_text  = dlg['text']
-                    bubble_emot  = dlg.get('emotion','normal')
+                    if 'beat' in dlg:
+                        # Beat: тиша з емоцією, без бульки
+                        bc = dlg.get('emotion_char', -1)
+                        if bc >= 0:
+                            beat_emotions[bc] = dlg.get('emotion', 'normal')
+                    else:
+                        talking_char = dlg['char']
+                        bubble_text  = dlg['text']
+                        bubble_emot  = dlg.get('emotion', 'normal')
+                        current_dlg  = dlg
                     break
 
-            img  = Image.new('RGB', (W,H))
+            img  = Image.new('RGB', (W, H))
             draw = ImageDraw.Draw(img)
             draw_bg(draw, fi)
 
@@ -914,6 +969,9 @@ def render_scene(scene_def, scene_idx, initial_chars, work_dir):
                 target_x = char_targets[char_id]
                 start_x  = char_starts[char_id]
                 arr_t    = arrival_times.get(char_id, 0.0)
+
+                gesture       = None
+                facing_camera = False
 
                 if char_id in exiting_set and t_cur >= exit_start:
                     from_x, to_x, edur = exit_data[char_id]
@@ -937,7 +995,18 @@ def render_scene(scene_def, scene_idx, initial_chars, work_dir):
                         facing_right = entering_dict[char_id] == 'left'
                     else:
                         facing_right = target_x <= W//2
-                    emo = bubble_emot if char_id==talking_char else 'normal'
+
+                    # Beat emotion або звичайна
+                    if char_id in beat_emotions:
+                        emo = beat_emotions[char_id]
+                    elif char_id == talking_char:
+                        emo = bubble_emot
+                        # Gesture і facing camera тільки для говорячого
+                        if current_dlg:
+                            gesture       = current_dlg.get('gesture')
+                            facing_camera = current_dlg.get('facing') == 'camera'
+                    else:
+                        emo = 'normal'
 
                 if cx_f < -HEAD_RX*2 or cx_f > W+HEAD_RX*2:
                     continue
@@ -945,7 +1014,8 @@ def render_scene(scene_def, scene_idx, initial_chars, work_dir):
                 is_talking = (char_id == talking_char)
                 draw_char(draw, fi, int(cx_f), char_id,
                           walking=walking, facing_right=facing_right,
-                          talking=is_talking, emotion=emo)
+                          talking=is_talking, emotion=emo,
+                          gesture=gesture, facing_camera=facing_camera)
                 if is_talking and bubble_text:
                     slot_i = sorted_present.index(char_id)
                     draw_bubble(draw, bubble_text, font, int(cx_f), slot_i, len(sorted_present))
@@ -955,17 +1025,32 @@ def render_scene(scene_def, scene_idx, initial_chars, work_dir):
         proc.stdin.close()
         proc.wait()
 
-    # Мікс аудіо
-    scene_out = os.path.join(work_dir, f'scene_{scene_idx}.mp4')
-    if audio_paths:
+    # Close-up zoom через FFmpeg (crop центр 2x)
+    shot = scene_def.get('shot', 'normal')
+    if shot == 'close_up':
+        zoomed = os.path.join(work_dir, f'zoom_{scene_idx}.mp4')
+        subprocess.run([
+            'ffmpeg', '-y', '-loglevel', 'error',
+            '-i', silent,
+            '-vf', f'crop={W//2}:{H}:{W//4}:0,scale={W}:{H}',
+            '-c:v', 'libx264', '-preset', 'ultrafast',
+            '-crf', '26', '-pix_fmt', 'yuv420p', '-threads', '1', zoomed
+        ], check=True)
+        os.unlink(silent)
+        silent = zoomed
+
+    # Мікс аудіо (beat = None, пропускаємо)
+    real_audio = [(i, p) for i, p in enumerate(audio_paths) if p is not None]
+    scene_out  = os.path.join(work_dir, f'scene_{scene_idx}.mp4')
+    if real_audio:
         inputs_cmd   = []
         filter_parts = []
-        for i, path in enumerate(audio_paths):
+        for j, (i, path) in enumerate(real_audio):
             delay_ms = int(dialog_times[i][0]*1000)
             inputs_cmd += ['-i', path]
-            filter_parts.append(f'[{i}:a]adelay={delay_ms}|{delay_ms}[a{i}]')
-        mix_str = ''.join(f'[a{i}]' for i in range(len(audio_paths)))
-        fc = ';'.join(filter_parts) + f';{mix_str}amix=inputs={len(audio_paths)}:dropout_transition=0[out]'
+            filter_parts.append(f'[{j}:a]adelay={delay_ms}|{delay_ms}[a{j}]')
+        mix_str = ''.join(f'[a{j}]' for j in range(len(real_audio)))
+        fc = ';'.join(filter_parts) + f';{mix_str}amix=inputs={len(real_audio)}:dropout_transition=0[out]'
         scene_audio = os.path.join(work_dir, f'aud_{scene_idx}.aac')
         subprocess.run([
             'ffmpeg', '-y', '-loglevel', 'error',
@@ -984,6 +1069,22 @@ def render_scene(scene_def, scene_idx, initial_chars, work_dir):
 
     final_chars = {cid: char_targets[cid] for cid in present if cid not in exiting_set}
     return scene_out, final_chars
+
+# ─── Чорний кадр між сценами (cut) ───────────────────────────────────────────
+
+def make_black_clip(work_dir, idx, frames=8):
+    """Короткий чорний кліп між сценами — South Park різкий cut."""
+    path = os.path.join(work_dir, f'black_{idx}.mp4')
+    dur  = frames / FPS
+    subprocess.run([
+        'ffmpeg', '-y', '-loglevel', 'error',
+        '-f', 'lavfi', '-i', f'color=c=black:size={W}x{H}:rate={FPS}',
+        '-f', 'lavfi', '-i', 'aevalsrc=0:sample_rate=44100:channel_layout=stereo',
+        '-t', str(dur),
+        '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '26', '-pix_fmt', 'yuv420p',
+        '-c:a', 'aac', path
+    ], check=True)
+    return path
 
 # ─── Головна ──────────────────────────────────────────────────────────────────
 
@@ -1005,6 +1106,9 @@ def main():
         print(f'🎬 Сцена {idx+1}/{len(scenes)}: {scene.get("background","вулиця")}', flush=True)
         clip, current_chars = render_scene(scene, idx, current_chars, work_dir)
         clips.append(clip)
+        # Cut-перехід між сценами (не після останньої)
+        if idx < len(scenes) - 1:
+            clips.append(make_black_clip(work_dir, idx))
         print(f'✅ Сцена {idx+1} готова', flush=True)
 
     print('🎞 Фінальна склейка...', flush=True)
