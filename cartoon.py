@@ -867,7 +867,7 @@ def render_scene(scene_def, scene_idx, initial_chars, work_dir):
     draw_bg = BG.get(bg_key, bg_street)
 
     entering_list = scene_def.get('enter', [])
-    entering_dict = {e['char']: e.get('from','left') for e in entering_list}
+    entering_dict = {e['char']: e.get('from', e.get('side', 'left')) for e in entering_list}
     exiting_set   = {e['char'] for e in scene_def.get('exit', [])}
 
     present        = set(initial_chars.keys()) | set(entering_dict.keys())

@@ -281,15 +281,36 @@ async function callLLM(messages, maxTokens = 2000) {
   return callLLMWithList(MODELS, messages, maxTokens);
 }
 
-// Витягує перший валідний JSON-об'єкт з тексту (надійніше за жадібний regex)
+// Витягує перший валідний JSON з тексту. Якщо масив — обгортає в {scenes:[...]}
 function extractJSON(text) {
   // Спочатку пробуємо ```json ... ``` блок
   const mdMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (mdMatch) {
-    try { return JSON.parse(mdMatch[1].trim()); } catch(e) {}
+    try {
+      const p = JSON.parse(mdMatch[1].trim());
+      return Array.isArray(p) ? { scenes: p } : p;
+    } catch(e) {}
   }
-  // Знаходимо перший { і рахуємо глибину дужок
-  const start = text.indexOf('{');
+
+  const startBrace   = text.indexOf('{');
+  const startBracket = text.indexOf('[');
+
+  // Якщо масив раніше за об'єкт — LLM повернув просто масив сцен
+  if (startBracket !== -1 && (startBrace === -1 || startBracket < startBrace)) {
+    let depth = 0;
+    for (let i = startBracket; i < text.length; i++) {
+      if (text[i] === '[') depth++;
+      else if (text[i] === ']') {
+        depth--;
+        if (depth === 0) {
+          try { return { scenes: JSON.parse(text.slice(startBracket, i + 1)) }; } catch(e) { break; }
+        }
+      }
+    }
+  }
+
+  // Звичайний об'єкт {…}
+  const start = startBrace;
   if (start === -1) return null;
   let depth = 0;
   for (let i = start; i < text.length; i++) {
