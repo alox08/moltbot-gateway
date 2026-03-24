@@ -281,6 +281,29 @@ async function callLLM(messages, maxTokens = 2000) {
   return callLLMWithList(MODELS, messages, maxTokens);
 }
 
+// Витягує перший валідний JSON-об'єкт з тексту (надійніше за жадібний regex)
+function extractJSON(text) {
+  // Спочатку пробуємо ```json ... ``` блок
+  const mdMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (mdMatch) {
+    try { return JSON.parse(mdMatch[1].trim()); } catch(e) {}
+  }
+  // Знаходимо перший { і рахуємо глибину дужок
+  const start = text.indexOf('{');
+  if (start === -1) return null;
+  let depth = 0;
+  for (let i = start; i < text.length; i++) {
+    if (text[i] === '{') depth++;
+    else if (text[i] === '}') {
+      depth--;
+      if (depth === 0) {
+        try { return JSON.parse(text.slice(start, i + 1)); } catch(e) { return null; }
+      }
+    }
+  }
+  return null;
+}
+
 // Розумний виклик — для субагентів (phi-4 думає, але краща якість)
 async function callLLMSmart(messages, maxTokens = 2000) {
   return callLLMWithList(MODELS_SMART, messages, maxTokens);
@@ -517,17 +540,8 @@ bot.on('interactionCreate', async (interaction) => {
     const raw = await callAgent('comic', tema);
     if (!raw) { await interaction.editReply('⚠️ Не вдалось згенерувати сценарій.'); return; }
 
-    // Витягуємо JSON (на випадок якщо модель додала зайвий текст)
-    const jsonMatch = raw.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) { await interaction.editReply(`⚠️ Некоректний формат сценарію:\n\`\`\`${raw.substring(0,300)}\`\`\``); return; }
-
-    let parsed;
-    try {
-      parsed = JSON.parse(jsonMatch[0]);
-    } catch (e) {
-      await interaction.editReply(`⚠️ Не вдалось розпарсити JSON: ${e.message}`);
-      return;
-    }
+    const parsed = extractJSON(raw);
+    if (!parsed) { await interaction.editReply(`⚠️ Некоректний формат сценарію:\n\`\`\`${raw.substring(0,300)}\`\`\``); return; }
 
     const scenes = parsed.scenes || [];
     const preview = scenes.map((s,i) => `**${i+1}. ${s.background}**\n🔵 ${s.left}\n🔴 ${s.right}`).join('\n\n');
@@ -560,22 +574,15 @@ bot.on('interactionCreate', async (interaction) => {
       const raw = await callAgent('cartoon', tema);
       if (!raw) { await interaction.editReply('⚠️ Не вдалось згенерувати сценарій.'); return; }
 
-      const jsonMatch = raw.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) { await interaction.editReply(`⚠️ Некоректний формат:\n\`\`\`${raw.substring(0,300)}\`\`\``); return; }
-
-      try {
-        parsed = JSON.parse(jsonMatch[0]);
-      } catch (e) {
-        await interaction.editReply(`⚠️ Не вдалось розпарсити JSON: ${e.message}`);
-        return;
-      }
+      parsed = extractJSON(raw);
+      if (!parsed) { await interaction.editReply(`⚠️ Некоректний формат:\n\`\`\`${raw.substring(0,300)}\`\`\``); return; }
     }
 
     const charNames = ['🔵 Остап', '🔴 Поліна', '🟢 Микола'];
     const scenes = parsed.scenes || [];
     const preview = scenes.map((s, i) => {
       const enters = (s.enter || []).map(e => `${charNames[e.char]} входить ${e.from === 'left' ? 'зліва' : 'справа'}`).join(', ');
-      const dlgs = (s.dialogs || []).map(d => `${charNames[d.char]}: "${d.text}"`).join('\n');
+      const dlgs = (s.dialogs || []).map(d => 'beat' in d ? `⏸ пауза ${d.beat}с` : `${charNames[d.char]}: "${d.text}"`).join('\n');
       return `**${i+1}. ${s.background}**${enters ? `\n_${enters}_` : ''}\n${dlgs}`;
     }).join('\n\n');
     await interaction.editReply(`📝 Сценарій:\n\n${preview.substring(0, 1800)}\n\n🎙 Малюю мультик...`);
