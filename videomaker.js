@@ -307,7 +307,8 @@ async function makeCartoonVideo(scenesJson) {
   const outputFile = `${workDir}/cartoon.mp4`;
 
   fs.writeFileSync(inputFile, scenesJson);
-  console.log(`🎬 cartoon.py: ${JSON.parse(scenesJson).scenes.length} сцен`);
+  const scenesCount = JSON.parse(scenesJson).scenes?.length ?? '?';
+  console.log(`🎬 cartoon.py: ${scenesCount} сцен`);
 
   execSync(`python3 /app/cartoon.py --input "${inputFile}" --output "${outputFile}"`, {
     stdio: 'pipe',

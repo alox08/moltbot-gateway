@@ -575,7 +575,10 @@ bot.on('interactionCreate', async (interaction) => {
       if (!raw) { await interaction.editReply('⚠️ Не вдалось згенерувати сценарій.'); return; }
 
       parsed = extractJSON(raw);
-      if (!parsed) { await interaction.editReply(`⚠️ Некоректний формат:\n\`\`\`${raw.substring(0,300)}\`\`\``); return; }
+      if (!parsed || !parsed.scenes || !parsed.scenes.length) {
+        await interaction.editReply(`⚠️ Некоректний формат (немає scenes):\n\`\`\`${(raw||'').substring(0,300)}\`\`\``);
+        return;
+      }
     }
 
     const charNames = ['🔵 Остап', '🔴 Поліна', '🟢 Микола'];
