@@ -593,7 +593,10 @@ bot.on('interactionCreate', async (interaction) => {
     if (tema.toLowerCase().trim() === 'моя') {
       parsed = DEMO_STORY;
     } else {
-      const raw = await callAgent('cartoon', tema);
+      const raw = await callLLMWithList(MODELS, [
+        { role: 'system', content: SYSTEM_CARTOON },
+        { role: 'user', content: tema },
+      ], 4000);
       if (!raw) { await interaction.editReply('⚠️ Не вдалось згенерувати сценарій.'); return; }
 
       parsed = extractJSON(raw);
