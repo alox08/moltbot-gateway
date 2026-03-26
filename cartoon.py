@@ -26,7 +26,7 @@ except ImportError:
 #
 #   1280 × 720 (16:9) — стандарт мультиків (South Park, Family Guy...)
 #   Персонажі ~35% висоти кадру — пропорційні будівлям на фоні
-#   VERSION: 2026-03-26-scale-fix
+#   VERSION: 2026-03-26-walk-fix
 #
 W, H       = 1280, 720
 FPS        = 25
@@ -913,20 +913,22 @@ def render_scene(scene_def, scene_idx, initial_chars, work_dir):
     slots          = slot_positions(len(sorted_present))
     char_targets   = {cid: slots[i] for i,cid in enumerate(sorted_present)}
 
-    # South Park стиль: персонажі з'являються миттєво (pop-in)
-    # Ті що вже були — можуть перейти на нову позицію якщо слот змінився
+    # Персонажі ходять з краю екрану (не pop-in)
     char_starts   = {}
     arrival_times = {}
+    
     for cid in entering_dict:
-        # Нові персонажі — pop-in одразу на слот
-        char_starts[cid]   = char_targets[cid]
-        arrival_times[cid] = 0.0
+        # Нові персонажі — ходять з краю екрану
+        side = entering_dict[cid]  # 'left' або 'right'
+        char_starts[cid] = -100 if side == 'left' else W + 100  # з-за меж екрану
+        dist = abs(char_targets[cid] - char_starts[cid])
+        arrival_times[cid] = dist / WALK_SPEED  # час ходьби
     for cid in initial_chars:
         start_x = initial_chars[cid]
         char_starts[cid]   = start_x
         dist = abs(char_targets[cid] - start_x)
-        # Якщо треба перейти — коротка пробіжка (не більше 0.6с)
-        arrival_times[cid] = min(dist / WALK_SPEED, 0.6) if dist > 10 else 0.0
+        # Якщо треба перейти — ходьба (не більше 1.5с)
+        arrival_times[cid] = min(dist / WALK_SPEED, 1.5) if dist > 10 else 0.0
 
     enter_end = max(arrival_times.values()) if arrival_times else 0.0
 
@@ -1138,7 +1140,7 @@ def main():
     parser.add_argument('--output', required=True)
     args = parser.parse_args()
 
-    print('🎬 Cartoon v2026-03-26-scale-fix', flush=True)
+    print('🎬 Cartoon v2026-03-26-walk-fix', flush=True)
 
     with open(args.input) as f:
         data = json.load(f)
