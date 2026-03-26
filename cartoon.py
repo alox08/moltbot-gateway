@@ -26,7 +26,7 @@ except ImportError:
 #
 #   1280 × 720 (16:9) — стандарт мультиків (South Park, Family Guy...)
 #   Персонажі ~35% висоти кадру — пропорційні будівлям на фоні
-#   VERSION: 2026-03-26-profile-fix
+#   VERSION: 2026-03-26-profile-fix2
 #
 W, H       = 1280, 720
 FPS        = 25
@@ -800,6 +800,7 @@ def draw_char(draw, fi, cx, char_id, walking=False, direction=0, talking=False, 
 
     # ── Куртка ──
     v_d  = NECK_Y + int(70*S)
+    lw_s = int(34*S)  # ширина лацкану
     
     if is_profile:
         # Профіль — вужче тіло (еліпс)
@@ -1199,7 +1200,7 @@ def main():
     parser.add_argument('--output', required=True)
     args = parser.parse_args()
 
-    print('🎬 Cartoon v2026-03-26-profile-fix', flush=True)
+    print('🎬 Cartoon v2026-03-26-profile-fix2', flush=True)
 
     with open(args.input) as f:
         data = json.load(f)
