@@ -625,6 +625,22 @@ bot.on('interactionCreate', async (interaction) => {
       const videoFile = await makeCartoonVideo(JSON.stringify(parsed));
       const attachment = new AttachmentBuilder(videoFile, { name: 'cartoon.mp4' });
       await interaction.followUp({ content: '✅ Мультик готовий! 🎬', files: [attachment] });
+      
+      // 📸 Завантажуємо 3 скріншоти з відео
+      const screenshotsDir = videoFile.replace('cartoon.mp4', 'screenshots');
+      const screenshotFiles = [
+        screenshotsDir + '/frame_02.png',
+        screenshotsDir + '/frame_04.png',
+        screenshotsDir + '/frame_06.png',
+      ].filter(f => fs.existsSync(f));
+      
+      if (screenshotFiles.length > 0) {
+        const screenshotAttachments = screenshotFiles.map(f => 
+          new AttachmentBuilder(f, { name: `screenshot_${f.split('/').pop()}` })
+        );
+        await interaction.followUp({ content: '📸 Скріншоти:', files: screenshotAttachments });
+      }
+      
       fs.unlinkSync(videoFile);
     } catch (e) {
       console.error('cartoon помилка:', e.message);
