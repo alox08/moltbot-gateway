@@ -715,9 +715,11 @@ def draw_char(draw, fi, cx, char_id, walking=False, facing_right=True, talking=F
     tcol  = cfg['tie']
     hair  = cfg['hair']
 
-    sway  = int(math.sin(fi*0.04)*2)
+    # Гойдання тільки при ходьбі
+    sway  = int(math.sin(fi*0.04)*2) if walking else 0
     cx    = cx + sway
-    swing = math.sin(fi*0.12)*20
+    # Розмах рук тільки при ходьбі
+    swing = math.sin(fi*0.12)*20 if walking else 0
     fs    = int(6*S) if facing_right else -int(6*S)
     hip_w = SHIRT_W + int(14*S)
     arm_y = NECK_Y  + int(28*S)
@@ -842,9 +844,9 @@ def draw_subtitle(draw, text, font):
     pad_y = 10
     pad_x = 20
     
-    # Обчислюємо ширину смуги
+    # Обчислюємо ширину смуги — тепер ширша (90% кадру макс)
     max_line = max(len(line) for line in lines)
-    strip_w = min(W - 40, max_line * 14 + 40)
+    strip_w = min(int(W * 0.90), max_line * 16 + 60)  # збільшено з 14 до 16 і +60
     strip_x = (W - strip_w) // 2
     
     # Чорна смуга
@@ -1018,14 +1020,14 @@ def render_scene(scene_def, scene_idx, initial_chars, work_dir):
         proc.stdin.close()
         proc.wait()
 
-    # Close-up zoom через FFmpeg (crop центр 2x)
+    # Close-up zoom через FFmpeg (crop центр 1.5x замість 2x)
     shot = scene_def.get('shot', 'normal')
     if shot == 'close_up':
         zoomed = os.path.join(work_dir, f'zoom_{scene_idx}.mp4')
         subprocess.run([
             'ffmpeg', '-y', '-loglevel', 'error',
             '-i', silent,
-            '-vf', f'crop={W//2}:{H}:{W//4}:0,scale={W}:{H}',
+            '-vf', f'crop={int(W*0.67)}:{int(H*0.67)}:{int(W*0.165)}:{int(H*0.165)},scale={W}:{H}',
             '-c:v', 'libx264', '-preset', 'ultrafast',
             '-crf', '26', '-pix_fmt', 'yuv420p', '-threads', '1', zoomed
         ], check=True)
