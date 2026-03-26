@@ -26,7 +26,7 @@ except ImportError:
 #
 #   1280 × 720 (16:9) — стандарт мультиків (South Park, Family Guy...)
 #   Персонажі ~50% висоти кадру — medium shot як у South Park
-#   VERSION: 2026-03-26-subtitles-wide
+#   VERSION: 2026-03-26-southpark-walk
 #
 W, H       = 1280, 720
 FPS        = 25
@@ -708,9 +708,13 @@ def draw_ponytail(draw, cx, facing_right):
     gx, gy = pts[n//2]
     draw.ellipse([gx-6, gy-6, gx+6, gy+6], fill=(215,45,45))
 
-# ─── Персонаж ─────────────────────────────────────────────────────────────────
+# ─── Персонаж — South Park стиль (ходьба боком) ──────────────────────────────
 
-def draw_char(draw, fi, cx, char_id, walking=False, facing_right=True, talking=False, emotion='normal', gesture=None, facing_camera=False):
+def draw_char(draw, fi, cx, char_id, walking=False, direction=0, talking=False, emotion='normal', gesture=None, facing_camera=False):
+    """
+    direction: 0=фронтально, 1=праворуч (профіль), 2=ліворуч (профіль)
+    South Park стиль: персонажі ходять боком, повертаються на 90°
+    """
     cfg   = CHAR_CFG[char_id % len(CHAR_CFG)]
     jcol  = cfg['jacket']
     tcol  = cfg['tie']
@@ -721,7 +725,11 @@ def draw_char(draw, fi, cx, char_id, walking=False, facing_right=True, talking=F
     cx    = cx + sway
     # Розмах рук тільки при ходьбі
     swing = math.sin(fi*0.12)*20 if walking else 0
-    fs    = int(6*S) if facing_right else -int(6*S)
+    
+    # Визначаємо профіль чи ні
+    is_profile = (direction == 1 or direction == 2)  # боком
+    facing_right = (direction == 1)  # 1=праворуч, 2=ліворуч
+    fs    = int(6*S) if facing_right else (-int(6*S) if direction == 2 else 0)
     hip_w = SHIRT_W + int(14*S)
     arm_y = NECK_Y  + int(28*S)
 
@@ -785,22 +793,51 @@ def draw_char(draw, fi, cx, char_id, walking=False, facing_right=True, talking=F
     # ── Ноги ──
     if walking:
         phase  = fi * 0.22
-        dir_m  = 1 if facing_right else -1
         stride = int(40*S)
         lift   = int(16*S)
-        l_sw   = math.sin(phase) * stride * dir_m
-        l_li   = max(0, math.sin(phase)) * lift
-        r_sw   = math.sin(phase+math.pi) * stride * dir_m
-        r_li   = max(0, math.sin(phase+math.pi)) * lift
-        lknee  = (cx-int(48*S)+int(l_sw*0.5), HIP_Y+int(85*S)-int(l_li*0.5))
-        lfoot  = (cx-int(48*S)+int(l_sw),      GROUND_Y-int(l_li))
-        rknee  = (cx+int(48*S)+int(r_sw*0.5),  HIP_Y+int(85*S)-int(r_li*0.5))
-        rfoot  = (cx+int(48*S)+int(r_sw),       GROUND_Y-int(r_li))
+        
+        if is_profile:
+            # Ходьба боком (профіль) — ноги одна перед одною
+            l_sw   = math.sin(phase) * stride
+            l_li   = max(0, math.sin(phase)) * lift
+            r_sw   = math.sin(phase+math.pi) * stride
+            r_li   = max(0, math.sin(phase+math.pi)) * lift
+            
+            # Для профілю: ноги по осі X (вперед/назад)
+            if facing_right:
+                lknee  = (cx-int(12*S)+int(l_sw*0.5), HIP_Y+int(85*S)-int(l_li*0.5))
+                lfoot  = (cx-int(12*S)+int(l_sw),      GROUND_Y-int(l_li))
+                rknee  = (cx+int(12*S)+int(r_sw*0.5),  HIP_Y+int(85*S)-int(r_li*0.5))
+                rfoot  = (cx+int(12*S)+int(r_sw),       GROUND_Y-int(r_li))
+            else:
+                lknee  = (cx+int(12*S)+int(l_sw*0.5), HIP_Y+int(85*S)-int(l_li*0.5))
+                lfoot  = (cx+int(12*S)+int(l_sw),      GROUND_Y-int(l_li))
+                rknee  = (cx-int(12*S)+int(r_sw*0.5),  HIP_Y+int(85*S)-int(r_li*0.5))
+                rfoot  = (cx-int(12*S)+int(r_sw),       GROUND_Y-int(r_li))
+        else:
+            # Фронтально — ноги в сторони
+            dir_m  = 1 if facing_right else -1
+            l_sw   = math.sin(phase) * stride * dir_m
+            l_li   = max(0, math.sin(phase)) * lift
+            r_sw   = math.sin(phase+math.pi) * stride * dir_m
+            r_li   = max(0, math.sin(phase+math.pi)) * lift
+            lknee  = (cx-int(48*S)+int(l_sw*0.5), HIP_Y+int(85*S)-int(l_li*0.5))
+            lfoot  = (cx-int(48*S)+int(l_sw),      GROUND_Y-int(l_li))
+            rknee  = (cx+int(48*S)+int(r_sw*0.5),  HIP_Y+int(85*S)-int(r_li*0.5))
+            rfoot  = (cx+int(48*S)+int(r_sw),       GROUND_Y-int(r_li))
     else:
-        lknee = (cx-int(48*S), HIP_Y+int(85*S))
-        lfoot = (cx-int(48*S), GROUND_Y)
-        rknee = (cx+int(48*S), HIP_Y+int(85*S))
-        rfoot = (cx+int(48*S), GROUND_Y)
+        if is_profile:
+            # Профіль стоячи — ноги поруч
+            lknee  = (cx-int(12*S), HIP_Y+int(85*S))
+            lfoot  = (cx-int(12*S), GROUND_Y)
+            rknee  = (cx+int(12*S), HIP_Y+int(85*S))
+            rfoot  = (cx+int(12*S), GROUND_Y)
+        else:
+            # Фронтально — ноги на ширині плечей
+            lknee = (cx-int(48*S), HIP_Y+int(85*S))
+            lfoot = (cx-int(48*S), GROUND_Y)
+            rknee = (cx+int(48*S), HIP_Y+int(85*S))
+            rfoot = (cx+int(48*S), GROUND_Y)
 
     lhip = (cx-hip_w//2, HIP_Y+6)
     rhip = (cx+hip_w//2, HIP_Y+6)
@@ -1008,8 +1045,19 @@ def render_scene(scene_def, scene_idx, initial_chars, work_dir):
                     continue
 
                 is_talking = (char_id == talking_char)
+                
+                # Конвертуємо facing_right в direction (South Park стиль)
+                if walking:
+                    # При ходьбі — профіль (боком)
+                    direction = 1 if facing_right else 2
+                elif facing_camera:
+                    direction = 0  # фронтально в камеру
+                else:
+                    # Стоїть — дивиться туди куди йшов або в камеру
+                    direction = 0  # фронтально за замовчуванням
+                
                 draw_char(draw, fi, int(cx_f), char_id,
-                          walking=walking, facing_right=facing_right,
+                          walking=walking, direction=direction,
                           talking=is_talking, emotion=emo,
                           gesture=gesture, facing_camera=facing_camera)
                 # Субтитри малюємо тільки один раз для активного діалогу
@@ -1090,7 +1138,7 @@ def main():
     parser.add_argument('--output', required=True)
     args = parser.parse_args()
 
-    print('🎬 Cartoon v2026-03-26-subtitles-wide', flush=True)
+    print('🎬 Cartoon v2026-03-26-southpark-walk', flush=True)
 
     with open(args.input) as f:
         data = json.load(f)
