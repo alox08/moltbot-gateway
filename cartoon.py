@@ -1116,7 +1116,33 @@ def main():
         '-c:a', 'aac', '-pix_fmt', 'yuv420p', '-threads', '1',
         args.output
     ], check=True)
+    
+    # 📸 Автоскріншоти для тестування (8 кадрів рівномірно)
+    print('📸 Роблю скріншоти...', flush=True)
+    screenshots_dir = os.path.join(work_dir, 'screenshots')
+    os.makedirs(screenshots_dir, exist_ok=True)
+    
+    # Отримуємо тривалість відео
+    dur_result = subprocess.run(
+        ['ffprobe', '-v', 'quiet', '-print_format', 'json', '-show_streams', args.output],
+        capture_output=True, text=True, check=True)
+    dur_data = json.loads(dur_result.stdout)
+    duration = float(dur_data['streams'][0].get('duration', 10))
+    
+    # Робимо 8 скріншотів рівномірно
+    n_frames = 8
+    for i in range(n_frames):
+        t = (i + 0.5) * duration / n_frames  # центр кожного сегменту
+        out_path = os.path.join(screenshots_dir, f'frame_{i+1:02d}.png')
+        subprocess.run([
+            'ffmpeg', '-y', '-loglevel', 'error',
+            '-ss', str(t), '-i', args.output,
+            '-vframes', '1', '-q:v', '2',
+            out_path
+        ], check=True)
+    
     print(f'✅ Готово: {args.output}', flush=True)
+    print(f'📸 Скріншоти: {screenshots_dir}/frame_*.png ({n_frames} кадрів)', flush=True)
 
 if __name__ == '__main__':
     main()
