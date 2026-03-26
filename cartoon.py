@@ -25,11 +25,11 @@ except ImportError:
 # ─── Розміри кадру ─────────────────────────────────────────────────────────────
 #
 #   1280 × 720 (16:9) — стандарт мультиків (South Park, Family Guy...)
-#   Персонажі ~30% висоти кадру — пропорційні фону
+#   Персонажі ~50% висоти кадру — medium shot як у South Park
 #
 W, H       = 1280, 720
 FPS        = 25
-S          = 0.48          # масштаб персонажів
+S          = 0.72          # масштаб персонажів (збільшено з 0.48)
 WALK_SPEED = 220           # px/s (ширший кадр — швидше)
 
 # ─── Кольори ──────────────────────────────────────────────────────────────────
@@ -55,7 +55,7 @@ CHAR_CFG = [
 # ─── Розміри персонажів ────────────────────────────────────────────────────────
 #
 #   GROUND_Y = 560 → 560..720 = 160px для дороги/трави під персонажами
-#   Персонаж зростом ~220px з 720 = 30.5% кадру (як South Park)
+#   Персонаж зростом ~330px з 720 = 46% кадру (medium shot як South Park)
 #
 
 GROUND_Y = 560
@@ -819,9 +819,10 @@ def draw_char(draw, fi, cx, char_id, walking=False, facing_right=True, talking=F
     # ── Обличчя ──
     draw_face(draw, fi, cx, facing_right, emotion, talking, facing_camera=facing_camera)
 
-# ─── Хмаринка діалогу ─────────────────────────────────────────────────────────
+# ─── Субтитри знизу (South Park стиль) ────────────────────────────────────────
 
-def wrap_text(text, max_chars=18):
+def wrap_subtitle(text, max_chars=42):
+    """Розбиває текст на рядки для субтитрів (макс 2 рядки)."""
     words, lines, line = text.split(), [], ''
     for w in words:
         test = (line + ' ' + w).strip()
@@ -832,32 +833,29 @@ def wrap_text(text, max_chars=18):
             line = test
     if line:
         lines.append(line.strip())
-    return lines[:3]
+    return lines[:2]
 
-def draw_bubble(draw, text, font, cx, slot_i, n_slots):
-    lines  = wrap_text(text) or ['...']
-    line_h = 38
-    pad    = 14
-
-    bub_w = min(340, W // max(n_slots, 1) + 100)
-    bx1   = max(8, cx - bub_w//2)
-    bx2   = min(W-8, bx1 + bub_w)
-    if bx2-bx1 < 100: bx1 = max(8, bx2-100)
-    by1   = 18
-    by2   = by1 + len(lines)*line_h + pad*2
-
-    draw.rounded_rectangle([bx1+4, by1+4, bx2+4, by2+4], radius=15, fill=(148,148,148))
-    draw.rounded_rectangle([bx1, by1, bx2, by2], radius=15,
-                            fill=BUBBLE_BG, outline=BUBBLE_BD, width=3)
-    tail_y  = HEAD_CY - HEAD_RY - 5
-    mid_bub = (bx1+bx2)//2
-    draw.polygon([(mid_bub-10,by2),(mid_bub+10,by2),(cx,tail_y)], fill=BUBBLE_BG)
-    draw.line([(mid_bub-10,by2),(cx,tail_y)], fill=BUBBLE_BD, width=2)
-    draw.line([(mid_bub+10,by2),(cx,tail_y)], fill=BUBBLE_BD, width=2)
-    ty    = by1 + pad
-    mid_x = (bx1+bx2)//2
+def draw_subtitle(draw, text, font):
+    """Малює субтитри: чорна смуга + білий текст знизу кадру."""
+    lines = wrap_subtitle(text) or ['...']
+    line_h = 32
+    pad_y = 10
+    pad_x = 20
+    
+    # Обчислюємо ширину смуги
+    max_line = max(len(line) for line in lines)
+    strip_w = min(W - 40, max_line * 14 + 40)
+    strip_x = (W - strip_w) // 2
+    
+    # Чорна смуга
+    strip_h = len(lines) * line_h + pad_y * 2
+    strip_y = H - strip_h - 8
+    draw.rectangle([strip_x, strip_y, strip_x + strip_w, strip_y + strip_h], fill=(0, 0, 0))
+    
+    # Текст
+    ty = strip_y + pad_y
     for line in lines:
-        draw.text((mid_x, ty), line, font=font, fill=TEXT_COL, anchor='mt')
+        draw.text((W // 2, ty), line, font=font, fill=WHITE, anchor='mt')
         ty += line_h
 
 # ─── Рендер сцени ─────────────────────────────────────────────────────────────
@@ -1011,9 +1009,9 @@ def render_scene(scene_def, scene_idx, initial_chars, work_dir):
                           walking=walking, facing_right=facing_right,
                           talking=is_talking, emotion=emo,
                           gesture=gesture, facing_camera=facing_camera)
-                if is_talking and bubble_text:
-                    slot_i = sorted_present.index(char_id)
-                    draw_bubble(draw, bubble_text, font, int(cx_f), slot_i, len(sorted_present))
+                # Субтитри малюємо тільки один раз для активного діалогу
+                if is_talking and bubble_text and current_dlg and current_dlg.get('char') == char_id:
+                    draw_subtitle(draw, bubble_text, font)
 
             proc.stdin.write(img.tobytes())
     finally:
