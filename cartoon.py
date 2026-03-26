@@ -26,6 +26,7 @@ except ImportError:
 #
 #   1280 × 720 (16:9) — стандарт мультиків (South Park, Family Guy...)
 #   Персонажі ~50% висоти кадру — medium shot як у South Park
+#   VERSION: 2026-03-26-subtitles-wide
 #
 W, H       = 1280, 720
 FPS        = 25
@@ -1088,6 +1089,8 @@ def main():
     parser.add_argument('--input',  required=True)
     parser.add_argument('--output', required=True)
     args = parser.parse_args()
+
+    print('🎬 Cartoon v2026-03-26-subtitles-wide', flush=True)
 
     with open(args.input) as f:
         data = json.load(f)
