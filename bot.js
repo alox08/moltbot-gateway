@@ -627,16 +627,17 @@ bot.on('interactionCreate', async (interaction) => {
       await interaction.followUp({ content: '✅ Мультик готовий! 🎬', files: [attachment] });
       
       // 📸 Завантажуємо 3 скріншоти з відео
-      const screenshotsDir = videoFile.replace('cartoon.mp4', 'screenshots');
+      const path = require('path');
+      const screenshotsDir = path.join(path.dirname(videoFile), 'screenshots');
       const screenshotFiles = [
-        screenshotsDir + '/frame_02.png',
-        screenshotsDir + '/frame_04.png',
-        screenshotsDir + '/frame_06.png',
+        path.join(screenshotsDir, 'frame_02.png'),
+        path.join(screenshotsDir, 'frame_04.png'),
+        path.join(screenshotsDir, 'frame_06.png'),
       ].filter(f => fs.existsSync(f));
       
       if (screenshotFiles.length > 0) {
         const screenshotAttachments = screenshotFiles.map(f => 
-          new AttachmentBuilder(f, { name: `screenshot_${f.split('/').pop()}` })
+          new AttachmentBuilder(f, { name: `screenshot_${path.basename(f)}` })
         );
         await interaction.followUp({ content: '📸 Скріншоти:', files: screenshotAttachments });
       }
