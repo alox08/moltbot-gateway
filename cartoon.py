@@ -844,9 +844,9 @@ def draw_subtitle(draw, text, font):
     pad_y = 10
     pad_x = 20
     
-    # Обчислюємо ширину смуги — тепер ширша (90% кадру макс)
+    # Обчислюємо ширину смуги — 100% кадру (від краю до краю)
     max_line = max(len(line) for line in lines)
-    strip_w = min(int(W * 0.90), max_line * 16 + 60)  # збільшено з 14 до 16 і +60
+    strip_w = W - 40  # майже весь кадр з відступом 20px з кожного боку
     strip_x = (W - strip_w) // 2
     
     # Чорна смуга
