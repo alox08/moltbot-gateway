@@ -26,7 +26,7 @@ except ImportError:
 #
 #   1280 × 720 (16:9) — стандарт мультиків (South Park, Family Guy...)
 #   Персонажі ~35% висоти кадру — пропорційні будівлям на фоні
-#   VERSION: 2026-03-26-walk-fix
+#   VERSION: 2026-03-26-profile-fix
 #
 W, H       = 1280, 720
 FPS        = 25
@@ -738,57 +738,98 @@ def draw_char(draw, fi, cx, char_id, walking=False, direction=0, talking=False, 
         draw_ponytail(draw, cx, facing_right)
 
     # ── Руки ──
+    # Для профілю: малюємо тільки одну руку (передню)
     front_sw = 1 if facing_right else -1  # сторона "вперед" відносно напрямку
-    for side in (-1, 1):
-        sw   = side if facing_right else -side
+    
+    if is_profile:
+        # Профіль — одна рука (передня)
+        sw = front_sw
         x_sh = cx + SHIRT_W * sw
-
+        
         if emotion == 'surprised':
-            # Обидві руки вгору — здивування
-            x_el = int(cx + SHIRT_W*sw + ARM_LEN*sw*0.2)
-            x_h  = int(cx + SHIRT_W*sw*0.3)
+            x_el = int(cx + SHIRT_W*sw*0.3)
             y_el = int(arm_y - ARM_LEN*0.25)
-            y_h  = int(arm_y - ARM_LEN*0.85)
+            x_h = int(cx + SHIRT_W*sw*0.5)
+            y_h = int(arm_y - ARM_LEN*0.85)
         elif emotion == 'angry':
-            # Руки розкидані в сторони — злість
-            x_el = int(cx + SHIRT_W*sw + ARM_LEN*sw*0.65)
-            x_h  = int(cx + SHIRT_W*sw + ARM_LEN*sw*1.1)
+            x_el = int(cx + SHIRT_W*sw*0.65)
             y_el = int(arm_y + ARM_LEN*0.15)
-            y_h  = int(arm_y - ARM_LEN*0.15)
+            x_h = int(cx + SHIRT_W*sw*1.1)
+            y_h = int(arm_y - ARM_LEN*0.15)
         elif gesture == 'explain' and sw == front_sw:
-            # Передня рука вгору — жест пояснення/аргумент
-            x_el = int(cx + SHIRT_W*sw + ARM_LEN*sw*0.25)
-            x_h  = int(cx + SHIRT_W*sw*0.6)
+            x_el = int(cx + SHIRT_W*sw*0.25)
             y_el = int(arm_y - ARM_LEN*0.15)
-            y_h  = int(arm_y - ARM_LEN*0.80)
+            x_h = int(cx + SHIRT_W*sw*0.6)
+            y_h = int(arm_y - ARM_LEN*0.80)
         else:
-            # Звичайне положення — руки звисають + гойдання
-            x_el = int(cx + SHIRT_W*sw + ARM_LEN*sw*0.45) + 4*sw
-            x_h  = int(cx + SHIRT_W*sw + ARM_LEN*sw)
+            # Звичайне положення
+            x_el = int(cx + SHIRT_W*sw*0.45)
             y_el = int(arm_y + ARM_LEN*0.35 + swing*0.5*sw)
-            y_h  = int(arm_y + 58 + swing*sw)
-
+            x_h = int(cx + SHIRT_W*sw)
+            y_h = int(arm_y + 58 + swing*sw)
+        
         _limb(draw, [(x_sh,arm_y),(x_el,y_el),(x_h,y_h)], STICK_LINE, SLEEVE_W)
+    else:
+        # Фронтально — дві руки
+        for side in (-1, 1):
+            sw   = side if facing_right else -side
+            x_sh = cx + SHIRT_W * sw
+
+            if emotion == 'surprised':
+                x_el = int(cx + SHIRT_W*sw + ARM_LEN*sw*0.2)
+                x_h  = int(cx + SHIRT_W*sw*0.3)
+                y_el = int(arm_y - ARM_LEN*0.25)
+                y_h  = int(arm_y - ARM_LEN*0.85)
+            elif emotion == 'angry':
+                x_el = int(cx + SHIRT_W*sw + ARM_LEN*sw*0.65)
+                x_h  = int(cx + SHIRT_W*sw + ARM_LEN*sw*1.1)
+                y_el = int(arm_y + ARM_LEN*0.15)
+                y_h  = int(arm_y - ARM_LEN*0.15)
+            elif gesture == 'explain' and sw == front_sw:
+                x_el = int(cx + SHIRT_W*sw + ARM_LEN*sw*0.25)
+                x_h  = int(cx + SHIRT_W*sw*0.6)
+                y_el = int(arm_y - ARM_LEN*0.15)
+                y_h  = int(arm_y - ARM_LEN*0.80)
+            else:
+                x_el = int(cx + SHIRT_W*sw + ARM_LEN*sw*0.45) + 4*sw
+                x_h  = int(cx + SHIRT_W*sw + ARM_LEN*sw)
+                y_el = int(arm_y + ARM_LEN*0.35 + swing*0.5*sw)
+                y_h  = int(arm_y + 58 + swing*sw)
+
+            _limb(draw, [(x_sh,arm_y),(x_el,y_el),(x_h,y_h)], STICK_LINE, SLEEVE_W)
 
     # ── Куртка ──
     v_d  = NECK_Y + int(70*S)
-    lw_s = int(34*S)
-    draw.rounded_rectangle([cx-hip_w, NECK_Y+4, cx+hip_w, HIP_Y+8],
-                            radius=int(18*S), fill=jcol, outline=STICK_LINE, width=3)
-    draw.polygon([(cx-int(18*S),NECK_Y+4),(cx+int(18*S),NECK_Y+4),(cx+fs//2,v_d)], fill=WHITE)
-    draw.polygon([(cx-int(18*S),NECK_Y+4),(cx-lw_s,NECK_Y+int(26*S)),
-                  (cx-int(16*S),v_d-7),(cx+fs//2,v_d)],
-                 fill=jcol, outline=STICK_LINE, width=2)
-    draw.polygon([(cx+int(18*S),NECK_Y+4),(cx+lw_s,NECK_Y+int(26*S)),
-                  (cx+int(16*S),v_d-7),(cx+fs//2,v_d)],
-                 fill=jcol, outline=STICK_LINE, width=2)
-    draw.line([(cx-int(18*S),NECK_Y+4),(cx+fs//2,v_d)], fill=STICK_LINE, width=2)
-    draw.line([(cx+int(18*S),NECK_Y+4),(cx+fs//2,v_d)], fill=STICK_LINE, width=2)
-    tx_t = cx + fs//3
-    draw.polygon([
-        (tx_t-4,v_d-2),(tx_t+4,v_d-2),
-        (tx_t+6,v_d+int(36*S)),(tx_t,v_d+int(52*S)),(tx_t-6,v_d+int(36*S))
-    ], fill=tcol, outline=STICK_LINE, width=2)
+    
+    if is_profile:
+        # Профіль — вужче тіло (еліпс)
+        jacket_w = int(hip_w * 0.5)  # вужче в 2 рази
+        draw.rounded_rectangle([cx-jacket_w, NECK_Y+4, cx+jacket_w, HIP_Y+8],
+                                radius=int(18*S), fill=jcol, outline=STICK_LINE, width=3)
+        # Краватка видно збоку
+        tx_t = cx + fs//2
+        draw.polygon([
+            (tx_t-3,v_d-2),(tx_t+3,v_d-2),
+            (tx_t+4,v_d+int(36*S)),(tx_t,v_d+int(52*S)),(tx_t-4,v_d+int(36*S))
+        ], fill=tcol, outline=STICK_LINE, width=2)
+    else:
+        # Фронтально — широке тіло
+        draw.rounded_rectangle([cx-hip_w, NECK_Y+4, cx+hip_w, HIP_Y+8],
+                                radius=int(18*S), fill=jcol, outline=STICK_LINE, width=3)
+        draw.polygon([(cx-int(18*S),NECK_Y+4),(cx+int(18*S),NECK_Y+4),(cx+fs//2,v_d)], fill=WHITE)
+        draw.polygon([(cx-int(18*S),NECK_Y+4),(cx-lw_s,NECK_Y+int(26*S)),
+                      (cx-int(16*S),v_d-7),(cx+fs//2,v_d)],
+                     fill=jcol, outline=STICK_LINE, width=2)
+        draw.polygon([(cx+int(18*S),NECK_Y+4),(cx+lw_s,NECK_Y+int(26*S)),
+                      (cx+int(16*S),v_d-7),(cx+fs//2,v_d)],
+                     fill=jcol, outline=STICK_LINE, width=2)
+        draw.line([(cx-int(18*S),NECK_Y+4),(cx+fs//2,v_d)], fill=STICK_LINE, width=2)
+        draw.line([(cx+int(18*S),NECK_Y+4),(cx+fs//2,v_d)], fill=STICK_LINE, width=2)
+        tx_t = cx + fs//3
+        draw.polygon([
+            (tx_t-4,v_d-2),(tx_t+4,v_d-2),
+            (tx_t+6,v_d+int(36*S)),(tx_t,v_d+int(52*S)),(tx_t-6,v_d+int(36*S))
+        ], fill=tcol, outline=STICK_LINE, width=2)
 
     # ── Ноги ──
     if walking:
@@ -852,9 +893,27 @@ def draw_char(draw, fi, cx, char_id, walking=False, direction=0, talking=False, 
     draw.rounded_rectangle([rfoot[0]-shoe//3, rfoot[1]-5, rfoot[0]+shoe, rfoot[1]+10],
                             radius=r_sh, fill=STICK_LINE)
 
-    # ── Голова — чиста, без тіні ──
-    draw.ellipse([cx-HEAD_RX, HEAD_CY-HEAD_RY, cx+HEAD_RX, HEAD_CY+HEAD_RY],
-                 fill=WHITE, outline=STICK_LINE, width=LW)
+    # ── Голова — профіль або фронтально ──
+    if is_profile:
+        # Профіль — овал повернутий на 90° (як у South Park)
+        head_w = int(HEAD_RX * 0.7)  # вужча голова збоку
+        head_h = HEAD_RY
+        # Зміщуємо голову трохи вперед по напрямку
+        head_cx = cx + fs//2
+        draw.ellipse([head_cx-head_w, HEAD_CY-head_h, head_cx+head_w, HEAD_CY+head_h],
+                     fill=WHITE, outline=STICK_LINE, width=LW)
+        # Ніс збоку
+        nose_x = head_cx + (head_w if facing_right else -head_w)
+        draw.ellipse([nose_x-3, HEAD_CY+int(12*S), nose_x+3, HEAD_CY+int(20*S)],
+                     fill=(188,148,128))
+    else:
+        # Фронтально — кругла голова
+        draw.ellipse([cx-HEAD_RX, HEAD_CY-HEAD_RY, cx+HEAD_RX, HEAD_CY+HEAD_RY],
+                     fill=WHITE, outline=STICK_LINE, width=LW)
+        # Ніс по центру
+        nx = cx + fs//2
+        draw.ellipse([nx-3, HEAD_CY+int(12*S), nx+3, HEAD_CY+int(20*S)],
+                     fill=(188,148,128))
 
     # ── Обличчя ──
     draw_face(draw, fi, cx, facing_right, emotion, talking, facing_camera=facing_camera)
@@ -1140,7 +1199,7 @@ def main():
     parser.add_argument('--output', required=True)
     args = parser.parse_args()
 
-    print('🎬 Cartoon v2026-03-26-walk-fix', flush=True)
+    print('🎬 Cartoon v2026-03-26-profile-fix', flush=True)
 
     with open(args.input) as f:
         data = json.load(f)
