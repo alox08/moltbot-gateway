@@ -26,7 +26,7 @@ except ImportError:
 #
 #   1280 × 720 (16:9) — стандарт мультиків (South Park, Family Guy...)
 #   Персонажі ~35% висоти кадру — пропорційні будівлям на фоні
-#   VERSION: 2026-03-26-profile-fix2
+#   VERSION: 2026-03-27-profile-head-fix
 #
 W, H       = 1280, 720
 FPS        = 25
@@ -552,6 +552,8 @@ def draw_face(draw, fi, cx, facing_right, emotion, talking, facing_camera=False)
     Емоції: normal, talking, surprised, angry, sad
     facing_camera=True — симетричне обличчя прямо в камеру
     """
+    is_profile = facing_right is not None and not facing_camera
+    
     if facing_camera:
         fs    = 0
         ey    = HEAD_CY - int(10*S)
@@ -562,27 +564,25 @@ def draw_face(draw, fi, cx, facing_right, emotion, talking, facing_camera=False)
         er_r  = int(25*S)
         pr_r  = int(14*S)
     else:
+        # Для профілю: очі зміщені до центру голови
         fs  = int(6*S) if facing_right else -int(6*S)
         ey  = HEAD_CY - int(10*S)
 
-        # ── Розміри очей ──
-        if facing_right:
-            el_cx = cx - int(24*S) + fs
-            er_cx = cx + int(38*S) + fs//2
-        else:
-            el_cx = cx - int(38*S) + fs//2
-            er_cx = cx + int(24*S) + fs
-
-        # Базові радіуси (без EYE_SCALE)
+        # Базові радіуси очей
         er_l  = int(22*S)
         pr_l  = int(12*S)
         er_r  = int(28*S)
         pr_r  = int(16*S)
-
-        # Зробити ліве/праве правильно при повороті
-        if not facing_right:
-            er_l, er_r = er_r, er_l
-            pr_l, pr_r = pr_r, pr_l
+        
+        # Для профілю: обидва ока ближче до центру, переднє око більше
+        if facing_right:
+            # Дивиться вправо — ліве око далі, праве ближче
+            el_cx = cx - int(18*S) + fs
+            er_cx = cx + int(22*S) + fs//2
+        else:
+            # Дивиться вліво — праве око далі, ліве ближче
+            el_cx = cx - int(22*S) + fs//2
+            er_cx = cx + int(18*S) + fs
 
     # Surprised — злегка більші очі
     if emotion == 'surprised':
@@ -844,18 +844,19 @@ def draw_char(draw, fi, cx, char_id, walking=False, direction=0, talking=False, 
             l_li   = max(0, math.sin(phase)) * lift
             r_sw   = math.sin(phase+math.pi) * stride
             r_li   = max(0, math.sin(phase+math.pi)) * lift
-            
-            # Для профілю: ноги по осі X (вперед/назад)
+
+            # Для профілю: ноги по осі X (вперед/назад), обидві з центру тіла
+            leg_offset = int(8*S)  # зміщення ніг від центру тіла
             if facing_right:
-                lknee  = (cx-int(12*S)+int(l_sw*0.5), HIP_Y+int(85*S)-int(l_li*0.5))
-                lfoot  = (cx-int(12*S)+int(l_sw),      GROUND_Y-int(l_li))
-                rknee  = (cx+int(12*S)+int(r_sw*0.5),  HIP_Y+int(85*S)-int(r_li*0.5))
-                rfoot  = (cx+int(12*S)+int(r_sw),       GROUND_Y-int(r_li))
+                lknee  = (cx - leg_offset + int(l_sw*0.5), HIP_Y+int(85*S)-int(l_li*0.5))
+                lfoot  = (cx - leg_offset + int(l_sw),      GROUND_Y-int(l_li))
+                rknee  = (cx + leg_offset + int(r_sw*0.5),  HIP_Y+int(85*S)-int(r_li*0.5))
+                rfoot  = (cx + leg_offset + int(r_sw),       GROUND_Y-int(r_li))
             else:
-                lknee  = (cx+int(12*S)+int(l_sw*0.5), HIP_Y+int(85*S)-int(l_li*0.5))
-                lfoot  = (cx+int(12*S)+int(l_sw),      GROUND_Y-int(l_li))
-                rknee  = (cx-int(12*S)+int(r_sw*0.5),  HIP_Y+int(85*S)-int(r_li*0.5))
-                rfoot  = (cx-int(12*S)+int(r_sw),       GROUND_Y-int(r_li))
+                lknee  = (cx + leg_offset + int(l_sw*0.5), HIP_Y+int(85*S)-int(l_li*0.5))
+                lfoot  = (cx + leg_offset + int(l_sw),      GROUND_Y-int(l_li))
+                rknee  = (cx - leg_offset + int(r_sw*0.5),  HIP_Y+int(85*S)-int(r_li*0.5))
+                rfoot  = (cx - leg_offset + int(r_sw),       GROUND_Y-int(r_li))
         else:
             # Фронтально — ноги в сторони
             dir_m  = 1 if facing_right else -1
@@ -869,11 +870,12 @@ def draw_char(draw, fi, cx, char_id, walking=False, direction=0, talking=False, 
             rfoot  = (cx+int(48*S)+int(r_sw),       GROUND_Y-int(r_li))
     else:
         if is_profile:
-            # Профіль стоячи — ноги поруч
-            lknee  = (cx-int(12*S), HIP_Y+int(85*S))
-            lfoot  = (cx-int(12*S), GROUND_Y)
-            rknee  = (cx+int(12*S), HIP_Y+int(85*S))
-            rfoot  = (cx+int(12*S), GROUND_Y)
+            # Профіль стоячи — ноги поруч (одна за одною)
+            leg_offset = int(8*S)
+            lknee  = (cx - leg_offset, HIP_Y+int(85*S))
+            lfoot  = (cx - leg_offset, GROUND_Y)
+            rknee  = (cx + leg_offset, HIP_Y+int(85*S))
+            rfoot  = (cx + leg_offset, GROUND_Y)
         else:
             # Фронтально — ноги на ширині плечей
             lknee = (cx-int(48*S), HIP_Y+int(85*S))
@@ -901,12 +903,28 @@ def draw_char(draw, fi, cx, char_id, walking=False, direction=0, talking=False, 
         head_h = HEAD_RY
         # Зміщуємо голову трохи вперед по напрямку
         head_cx = cx + fs//2
+        
+        # Малюємо голову овалом
         draw.ellipse([head_cx-head_w, HEAD_CY-head_h, head_cx+head_w, HEAD_CY+head_h],
                      fill=WHITE, outline=STICK_LINE, width=LW)
-        # Ніс збоку
+        
+        # Ніс профілем — трикутник на краю голови
         nose_x = head_cx + (head_w if facing_right else -head_w)
-        draw.ellipse([nose_x-3, HEAD_CY+int(12*S), nose_x+3, HEAD_CY+int(20*S)],
-                     fill=(188,148,128))
+        nose_y = HEAD_CY + int(16*S)
+        if facing_right:
+            # Дивиться вправо — ніс праворуч
+            draw.polygon([
+                (nose_x - int(8*S), HEAD_CY + int(8*S)),
+                (nose_x + int(12*S), nose_y),
+                (nose_x - int(8*S), HEAD_CY + int(24*S)),
+            ], fill=(188,148,128), outline=STICK_LINE, width=2)
+        else:
+            # Дивиться вліво — ніс ліворуч
+            draw.polygon([
+                (nose_x + int(8*S), HEAD_CY + int(8*S)),
+                (nose_x - int(12*S), nose_y),
+                (nose_x + int(8*S), HEAD_CY + int(24*S)),
+            ], fill=(188,148,128), outline=STICK_LINE, width=2)
     else:
         # Фронтально — кругла голова
         draw.ellipse([cx-HEAD_RX, HEAD_CY-HEAD_RY, cx+HEAD_RX, HEAD_CY+HEAD_RY],
@@ -1109,14 +1127,15 @@ def render_scene(scene_def, scene_idx, initial_chars, work_dir):
                 is_talking = (char_id == talking_char)
                 
                 # Конвертуємо facing_right в direction (South Park стиль)
-                if walking:
+                if facing_camera:
+                    direction = 0  # фронтально в камеру
+                elif walking:
                     # При ходьбі — профіль (боком)
                     direction = 1 if facing_right else 2
-                elif facing_camera:
-                    direction = 0  # фронтально в камеру
                 else:
-                    # Стоїть — дивиться туди куди йшов або в камеру
-                    direction = 0  # фронтально за замовчуванням
+                    # Стоїть — зберігаємо профіль якщо дивиться вліво/вправо
+                    # direction = 1 (праворуч) або 2 (ліворуч) для профілю
+                    direction = 1 if facing_right else 2
                 
                 draw_char(draw, fi, int(cx_f), char_id,
                           walking=walking, direction=direction,
