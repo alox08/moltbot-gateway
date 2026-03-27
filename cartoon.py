@@ -26,7 +26,7 @@ except ImportError:
 #
 #   1280 × 720 (16:9) — стандарт мультиків (South Park, Family Guy...)
 #   Персонажі ~35% висоти кадру — пропорційні будівлям на фоні
-#   VERSION: 2026-03-27-profile-head-fix
+#   VERSION: 2026-03-27-profile-one-eye-fix
 #
 W, H       = 1280, 720
 FPS        = 25
@@ -552,9 +552,10 @@ def draw_face(draw, fi, cx, facing_right, emotion, talking, facing_camera=False)
     Емоції: normal, talking, surprised, angry, sad
     facing_camera=True — симетричне обличчя прямо в камеру
     """
-    is_profile = facing_right is not None and not facing_camera
+    is_profile = not facing_camera
     
     if facing_camera:
+        # Фронтально в камеру — два ока симетрично
         fs    = 0
         ey    = HEAD_CY - int(10*S)
         el_cx = cx - int(28*S)
@@ -564,88 +565,115 @@ def draw_face(draw, fi, cx, facing_right, emotion, talking, facing_camera=False)
         er_r  = int(25*S)
         pr_r  = int(14*S)
     else:
-        # Для профілю: очі зміщені до центру голови
+        # Профіль — ТІЛЬКИ ОДНЕ ОКО (переднє)
         fs  = int(6*S) if facing_right else -int(6*S)
         ey  = HEAD_CY - int(10*S)
 
-        # Базові радіуси очей
-        er_l  = int(22*S)
-        pr_l  = int(12*S)
-        er_r  = int(28*S)
-        pr_r  = int(16*S)
-        
-        # Для профілю: обидва ока ближче до центру, переднє око більше
+        # Для профілю: тільки одне око (переднє)
         if facing_right:
-            # Дивиться вправо — ліве око далі, праве ближче
-            el_cx = cx - int(18*S) + fs
-            er_cx = cx + int(22*S) + fs//2
+            # Дивиться вправо — праве око (переднє)
+            eye_cx = cx + int(14*S) + fs//2
         else:
-            # Дивиться вліво — праве око далі, ліве ближче
-            el_cx = cx - int(22*S) + fs//2
-            er_cx = cx + int(18*S) + fs
+            # Дивиться вліво — ліве око (переднє)
+            eye_cx = cx - int(14*S) + fs//2
+        
+        er   = int(24*S)  # радіус ока
+        pr   = int(13*S)  # зіниця
 
     # Surprised — злегка більші очі
-    if emotion == 'surprised':
-        er_l = int(er_l * 1.2)
-        er_r = int(er_r * 1.2)
+    if emotion == 'surprised' and not facing_camera:
+        er = int(er * 1.2)
+        pr = int(pr * 1.2)
 
     # Малюємо очі
-    for ecx, er, pr in [(el_cx, er_l, pr_l), (er_cx, er_r, pr_r)]:
-        draw.ellipse([ecx-er, ey-er, ecx+er, ey+er],
+    if facing_camera:
+        # Два ока для фронтального вигляду
+        for ecx, eradius, pradius in [(el_cx, er_l, pr_l), (er_cx, er_r, pr_r)]:
+            draw.ellipse([ecx-eradius, ey-eradius, ecx+eradius, ey+eradius],
+                         fill=WHITE, outline=STICK_LINE, width=3)
+            draw.ellipse([ecx-pradius//2+1, ey-pradius//2, ecx+pradius//2+1, ey+pradius//2+1],
+                         fill=STICK_LINE)
+            # Відблиск
+            draw.ellipse([ecx-6, ey-int(eradius*0.55), ecx, ey-int(eradius*0.18)], fill=WHITE)
+    else:
+        # Одне око для профілю
+        draw.ellipse([eye_cx-er, ey-er, eye_cx+er, ey+er],
                      fill=WHITE, outline=STICK_LINE, width=3)
-        draw.ellipse([ecx-pr//2+1, ey-pr//2, ecx+pr//2+1, ey+pr//2+1],
+        draw.ellipse([eye_cx-pr//2+1, ey-pr//2, eye_cx+pr//2+1, ey+pr//2+1],
                      fill=STICK_LINE)
         # Відблиск
-        draw.ellipse([ecx-6, ey-int(er*0.55), ecx, ey-int(er*0.18)], fill=WHITE)
+        draw.ellipse([eye_cx-6, ey-int(er*0.55), eye_cx, ey-int(er*0.18)], fill=WHITE)
 
     # ── Брови ──
-    # Нейтральна позиція: трохи вище очей
-    brow_y_norm = ey - max(er_l, er_r) - 7
-
-    if facing_camera and emotion not in ('angry', 'sad', 'surprised'):
-        # Рівні симетричні брови для "в камеру"
-        by = brow_y_norm
-        draw.line([(el_cx-er_l+2, by+3), (el_cx+er_l-2, by+3)], fill=STICK_LINE, width=5)
-        draw.line([(er_cx-er_r+2, by+3), (er_cx+er_r-2, by+3)], fill=STICK_LINE, width=5)
-    elif emotion == 'angry':
-        # Злі: V-форма, притиснуті до очей
-        by = ey - max(er_l, er_r) - 4
-        draw.line([(el_cx-er_l+2, by+2), (el_cx+er_l-2, by+10)],
-                  fill=STICK_LINE, width=6)
-        draw.line([(er_cx-er_r+2, by+10), (er_cx+er_r-2, by+2)],
-                  fill=STICK_LINE, width=6)
-
-    elif emotion == 'sad':
-        # Сумні: зовнішні кути опускаються
-        by = brow_y_norm
-        draw.line([(el_cx-er_l+2, by+10), (el_cx+er_l-2, by+2)],
-                  fill=STICK_LINE, width=6)
-        draw.line([(er_cx-er_r+2, by+2), (er_cx+er_r-2, by+10)],
-                  fill=STICK_LINE, width=6)
-
-    elif emotion == 'surprised':
-        # Здивовані: РІЗКО вгору, великий відступ від очей
-        by = ey - max(er_l, er_r) - 20  # <-- летять вгору!
-        draw.arc([el_cx-er_l+2, by-8, el_cx+er_l-2, by+10],
-                 195, 345, fill=STICK_LINE, width=6)
-        draw.arc([er_cx-er_r+2, by-8, er_cx+er_r-2, by+10],
-                 195, 345, fill=STICK_LINE, width=6)
-
-    else:  # normal / talking
-        by = brow_y_norm
-        draw.line([(el_cx-er_l+2, by+5), (el_cx+er_l-2, by)],
-                  fill=STICK_LINE, width=5)
-        draw.line([(er_cx-er_r+2, by), (er_cx+er_r-2, by+5)],
-                  fill=STICK_LINE, width=5)
+    if facing_camera:
+        # Дві брови для фронтального вигляду
+        brow_y_norm = ey - max(er_l, er_r) - 7
+        
+        if emotion not in ('angry', 'sad', 'surprised'):
+            by = brow_y_norm
+            draw.line([(el_cx-er_l+2, by+3), (el_cx+er_l-2, by+3)], fill=STICK_LINE, width=5)
+            draw.line([(er_cx-er_r+2, by+3), (er_cx+er_r-2, by+3)], fill=STICK_LINE, width=5)
+        elif emotion == 'angry':
+            by = ey - max(er_l, er_r) - 4
+            draw.line([(el_cx-er_l+2, by+2), (el_cx+er_l-2, by+10)], fill=STICK_LINE, width=6)
+            draw.line([(er_cx-er_r+2, by+10), (er_cx+er_r-2, by+2)], fill=STICK_LINE, width=6)
+        elif emotion == 'sad':
+            by = brow_y_norm
+            draw.line([(el_cx-er_l+2, by+10), (el_cx+er_l-2, by+2)], fill=STICK_LINE, width=6)
+            draw.line([(er_cx-er_r+2, by+2), (er_cx+er_r-2, by+10)], fill=STICK_LINE, width=6)
+        elif emotion == 'surprised':
+            by = ey - max(er_l, er_r) - 20
+            draw.arc([el_cx-er_l+2, by-8, el_cx+er_l-2, by+10], 195, 345, fill=STICK_LINE, width=6)
+            draw.arc([er_cx-er_r+2, by-8, er_cx+er_r-2, by+10], 195, 345, fill=STICK_LINE, width=6)
+        else:
+            by = brow_y_norm
+            draw.line([(el_cx-er_l+2, by+5), (el_cx+er_l-2, by)], fill=STICK_LINE, width=5)
+            draw.line([(er_cx-er_r+2, by), (er_cx+er_r-2, by+5)], fill=STICK_LINE, width=5)
+    else:
+        # Одна брова для профілю
+        brow_y = ey - er - 8
+        
+        if emotion == 'angry':
+            draw.line([(eye_cx-er+4, brow_y+2), (eye_cx+er-4, brow_y+8)], fill=STICK_LINE, width=6)
+        elif emotion == 'sad':
+            draw.line([(eye_cx-er+4, brow_y+8), (eye_cx+er-4, brow_y+2)], fill=STICK_LINE, width=6)
+        elif emotion == 'surprised':
+            draw.arc([eye_cx-er+2, brow_y-10, eye_cx+er-2, brow_y+6], 195, 345, fill=STICK_LINE, width=6)
+        else:
+            draw.line([(eye_cx-er+4, brow_y+4), (eye_cx+er-4, brow_y)], fill=STICK_LINE, width=5)
 
     # ── Ніс ──
-    nx = cx + fs//2
-    draw.ellipse([nx-3, HEAD_CY+int(12*S), nx+3, HEAD_CY+int(20*S)],
-                 fill=(188,148,128))
+    if facing_camera:
+        # Ніс по центру для фронтального
+        nx = cx + fs//2
+        draw.ellipse([nx-3, HEAD_CY+int(12*S), nx+3, HEAD_CY+int(20*S)],
+                     fill=(188,148,128))
+    else:
+        # Ніс профілем — трикутник на краю голови
+        nose_x = cx + (int(38*S) if facing_right else -int(38*S))
+        nose_y = HEAD_CY + int(18*S)
+        if facing_right:
+            draw.polygon([
+                (nose_x - int(6*S), HEAD_CY + int(10*S)),
+                (nose_x + int(14*S), nose_y),
+                (nose_x - int(6*S), HEAD_CY + int(26*S)),
+            ], fill=(188,148,128), outline=STICK_LINE, width=2)
+        else:
+            draw.polygon([
+                (nose_x + int(6*S), HEAD_CY + int(10*S)),
+                (nose_x - int(14*S), nose_y),
+                (nose_x + int(6*S), HEAD_CY + int(26*S)),
+            ], fill=(188,148,128), outline=STICK_LINE, width=2)
 
     # ── Рот ──
     my = HEAD_CY + int(44*S)
-    mx_off = fs//2
+    
+    if facing_camera:
+        mx_off = fs//2
+    else:
+        # Для профілю: рот зміщений до носу (на 1/3 від центру до краю)
+        mouth_offset = int(20*S)
+        mx_off = mouth_offset if facing_right else -mouth_offset
 
     if emotion == 'surprised':
         # О-рот
@@ -837,26 +865,33 @@ def draw_char(draw, fi, cx, char_id, walking=False, direction=0, talking=False, 
         phase  = fi * 0.22
         stride = int(40*S)
         lift   = int(16*S)
-        
-        if is_profile:
-            # Ходьба боком (профіль) — ноги одна перед одною
-            l_sw   = math.sin(phase) * stride
-            l_li   = max(0, math.sin(phase)) * lift
-            r_sw   = math.sin(phase+math.pi) * stride
-            r_li   = max(0, math.sin(phase+math.pi)) * lift
 
-            # Для профілю: ноги по осі X (вперед/назад), обидві з центру тіла
-            leg_offset = int(8*S)  # зміщення ніг від центру тіла
-            if facing_right:
-                lknee  = (cx - leg_offset + int(l_sw*0.5), HIP_Y+int(85*S)-int(l_li*0.5))
-                lfoot  = (cx - leg_offset + int(l_sw),      GROUND_Y-int(l_li))
-                rknee  = (cx + leg_offset + int(r_sw*0.5),  HIP_Y+int(85*S)-int(r_li*0.5))
-                rfoot  = (cx + leg_offset + int(r_sw),       GROUND_Y-int(r_li))
-            else:
-                lknee  = (cx + leg_offset + int(l_sw*0.5), HIP_Y+int(85*S)-int(l_li*0.5))
-                lfoot  = (cx + leg_offset + int(l_sw),      GROUND_Y-int(l_li))
-                rknee  = (cx - leg_offset + int(r_sw*0.5),  HIP_Y+int(85*S)-int(r_li*0.5))
-                rfoot  = (cx - leg_offset + int(r_sw),       GROUND_Y-int(r_li))
+        if is_profile:
+            # Ходьба боком (профіль) — ноги одна перед одною з колінами
+            # Обидві ноги виходять з центру тіла
+            l_angle = math.sin(phase) * 0.8  # кут нахилу стегна
+            r_angle = math.sin(phase + math.pi) * 0.8
+            
+            # Довжина сегментів ноги
+            thigh_len = int(70*S)  # стегно
+            shin_len  = int(70*S)  # гомілка
+            
+            # Ліва нога (задня)
+            lknee_x = cx - int(LEG_W * 0.5) + int(math.sin(l_angle) * thigh_len)
+            lknee_y = HIP_Y + int(85*S) + int(math.cos(l_angle) * thigh_len)
+            lfoot_x = cx - int(LEG_W * 0.5) + int(math.sin(l_angle) * (thigh_len + shin_len))
+            lfoot_y = GROUND_Y - max(0, math.sin(phase)) * lift
+            
+            # Права нога (передня)
+            rknee_x = cx + int(LEG_W * 0.5) + int(math.sin(r_angle) * thigh_len)
+            rknee_y = HIP_Y + int(85*S) + int(math.cos(r_angle) * thigh_len)
+            rfoot_x = cx + int(LEG_W * 0.5) + int(math.sin(r_angle) * (thigh_len + shin_len))
+            rfoot_y = GROUND_Y - max(0, math.sin(phase + math.pi)) * lift
+            
+            lknee = (lknee_x, lknee_y)
+            lfoot = (lfoot_x, lfoot_y)
+            rknee = (rknee_x, rknee_y)
+            rfoot = (rfoot_x, rfoot_y)
         else:
             # Фронтально — ноги в сторони
             dir_m  = 1 if facing_right else -1
@@ -871,11 +906,10 @@ def draw_char(draw, fi, cx, char_id, walking=False, direction=0, talking=False, 
     else:
         if is_profile:
             # Профіль стоячи — ноги поруч (одна за одною)
-            leg_offset = int(8*S)
-            lknee  = (cx - leg_offset, HIP_Y+int(85*S))
-            lfoot  = (cx - leg_offset, GROUND_Y)
-            rknee  = (cx + leg_offset, HIP_Y+int(85*S))
-            rfoot  = (cx + leg_offset, GROUND_Y)
+            lknee  = (cx - int(LEG_W), HIP_Y+int(85*S))
+            lfoot  = (cx - int(LEG_W), GROUND_Y)
+            rknee  = (cx + int(LEG_W), HIP_Y+int(85*S))
+            rfoot  = (cx + int(LEG_W), GROUND_Y)
         else:
             # Фронтально — ноги на ширині плечей
             lknee = (cx-int(48*S), HIP_Y+int(85*S))
