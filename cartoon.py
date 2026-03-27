@@ -26,7 +26,7 @@ except ImportError:
 #
 #   1280 × 720 (16:9) — стандарт мультиків (South Park, Family Guy...)
 #   Персонажі ~35% висоти кадру — пропорційні будівлям на фоні
-#   VERSION: 2026-03-27-profile-one-eye-fix
+#   VERSION: 2026-03-27-profile-fix-v2
 #
 W, H       = 1280, 720
 FPS        = 25
@@ -569,13 +569,13 @@ def draw_face(draw, fi, cx, facing_right, emotion, talking, facing_camera=False)
         fs  = int(6*S) if facing_right else -int(6*S)
         ey  = HEAD_CY - int(10*S)
 
-        # Для профілю: тільки одне око (переднє)
+        # Для профілю: тільки одне око (переднє) — ближче до краю голови
         if facing_right:
             # Дивиться вправо — праве око (переднє)
-            eye_cx = cx + int(14*S) + fs//2
+            eye_cx = cx + int(28*S) + fs//2  # ближче до краю (було 14*S)
         else:
             # Дивиться вліво — ліве око (переднє)
-            eye_cx = cx - int(14*S) + fs//2
+            eye_cx = cx - int(28*S) + fs//2  # ближче до краю (було 14*S)
         
         er   = int(24*S)  # радіус ока
         pr   = int(13*S)  # зіниця
@@ -868,24 +868,31 @@ def draw_char(draw, fi, cx, char_id, walking=False, direction=0, talking=False, 
 
         if is_profile:
             # Ходьба боком (профіль) — ноги одна перед одною з колінами
-            # Обидві ноги виходять з центру тіла
-            l_angle = math.sin(phase) * 0.8  # кут нахилу стегна
-            r_angle = math.sin(phase + math.pi) * 0.8
+            # Кут нахилу ноги — менший щоб не перехрещувались
+            leg_swing = math.sin(phase) * 22  # кут гойдання в градусах
             
             # Довжина сегментів ноги
-            thigh_len = int(70*S)  # стегно
-            shin_len  = int(70*S)  # гомілка
+            thigh_len = int(65*S)  # стегно
+            shin_len  = int(65*S)  # гомілка
             
-            # Ліва нога (задня)
-            lknee_x = cx - int(LEG_W * 0.5) + int(math.sin(l_angle) * thigh_len)
-            lknee_y = HIP_Y + int(85*S) + int(math.cos(l_angle) * thigh_len)
-            lfoot_x = cx - int(LEG_W * 0.5) + int(math.sin(l_angle) * (thigh_len + shin_len))
+            # Конвертуємо кут в радіани для обчислень
+            rad = math.radians(leg_swing)
+            
+            # Ліва нога (задня) — виходить з лівого боку тіла
+            lhip_x = cx - int(LEG_W)
+            lhip_y = HIP_Y + 6
+            lknee_x = lhip_x + int(math.sin(rad) * thigh_len)
+            lknee_y = lhip_y + int(math.cos(rad) * thigh_len)
+            lfoot_x = lhip_x + int(math.sin(rad) * (thigh_len + shin_len))
             lfoot_y = GROUND_Y - max(0, math.sin(phase)) * lift
             
-            # Права нога (передня)
-            rknee_x = cx + int(LEG_W * 0.5) + int(math.sin(r_angle) * thigh_len)
-            rknee_y = HIP_Y + int(85*S) + int(math.cos(r_angle) * thigh_len)
-            rfoot_x = cx + int(LEG_W * 0.5) + int(math.sin(r_angle) * (thigh_len + shin_len))
+            # Права нога (передня) — виходить з правого боку тіла
+            rhip_x = cx + int(LEG_W)
+            rhip_y = HIP_Y + 6
+            r_rad = math.radians(-leg_swing)  # протифаза
+            rknee_x = rhip_x + int(math.sin(r_rad) * thigh_len)
+            rknee_y = rhip_y + int(math.cos(r_rad) * thigh_len)
+            rfoot_x = rhip_x + int(math.sin(r_rad) * (thigh_len + shin_len))
             rfoot_y = GROUND_Y - max(0, math.sin(phase + math.pi)) * lift
             
             lknee = (lknee_x, lknee_y)
@@ -937,36 +944,16 @@ def draw_char(draw, fi, cx, char_id, walking=False, direction=0, talking=False, 
         head_h = HEAD_RY
         # Зміщуємо голову трохи вперед по напрямку
         head_cx = cx + fs//2
-        
+
         # Малюємо голову овалом
         draw.ellipse([head_cx-head_w, HEAD_CY-head_h, head_cx+head_w, HEAD_CY+head_h],
                      fill=WHITE, outline=STICK_LINE, width=LW)
-        
-        # Ніс профілем — трикутник на краю голови
-        nose_x = head_cx + (head_w if facing_right else -head_w)
-        nose_y = HEAD_CY + int(16*S)
-        if facing_right:
-            # Дивиться вправо — ніс праворуч
-            draw.polygon([
-                (nose_x - int(8*S), HEAD_CY + int(8*S)),
-                (nose_x + int(12*S), nose_y),
-                (nose_x - int(8*S), HEAD_CY + int(24*S)),
-            ], fill=(188,148,128), outline=STICK_LINE, width=2)
-        else:
-            # Дивиться вліво — ніс ліворуч
-            draw.polygon([
-                (nose_x + int(8*S), HEAD_CY + int(8*S)),
-                (nose_x - int(12*S), nose_y),
-                (nose_x + int(8*S), HEAD_CY + int(24*S)),
-            ], fill=(188,148,128), outline=STICK_LINE, width=2)
+        # Ніс малюється в draw_face()
     else:
         # Фронтально — кругла голова
         draw.ellipse([cx-HEAD_RX, HEAD_CY-HEAD_RY, cx+HEAD_RX, HEAD_CY+HEAD_RY],
                      fill=WHITE, outline=STICK_LINE, width=LW)
-        # Ніс по центру
-        nx = cx + fs//2
-        draw.ellipse([nx-3, HEAD_CY+int(12*S), nx+3, HEAD_CY+int(20*S)],
-                     fill=(188,148,128))
+        # Ніс малюється в draw_face()
 
     # ── Обличчя ──
     draw_face(draw, fi, cx, facing_right, emotion, talking, facing_camera=facing_camera)
