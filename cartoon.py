@@ -26,7 +26,7 @@ except ImportError:
 #
 #   1280 × 720 (16:9) — стандарт мультиків (South Park, Family Guy...)
 #   Персонажі ~35% висоти кадру — пропорційні будівлям на фоні
-#   VERSION: 2026-03-27-profile-fix-v2
+#   VERSION: 2026-03-28-profile-fix-nose-eye-walk
 #
 W, H       = 1280, 720
 FPS        = 25
@@ -569,14 +569,15 @@ def draw_face(draw, fi, cx, facing_right, emotion, talking, facing_camera=False)
         fs  = int(6*S) if facing_right else -int(6*S)
         ey  = HEAD_CY - int(10*S)
 
-        # Для профілю: тільки одне око (переднє) — ближче до краю голови
+        # Для профілю: тільки одне око (переднє) — ЗСУНЕНО ВПЕРЕД на 3/4 від центру до краю
+        # Щоб око було виразніше видно в профіль
         if facing_right:
-            # Дивиться вправо — праве око (переднє)
-            eye_cx = cx + int(28*S) + fs//2  # ближче до краю (було 14*S)
+            # Дивиться вправо — праве око (переднє) — зміщено на 3/4 до правого краю
+            eye_cx = cx + int(52*S)  # було 28*S + fs//2 ≈ 31*S
         else:
-            # Дивиться вліво — ліве око (переднє)
-            eye_cx = cx - int(28*S) + fs//2  # ближче до краю (було 14*S)
-        
+            # Дивиться вліво — ліве око (переднє) — зміщено на 3/4 до лівого краю
+            eye_cx = cx - int(52*S)  # було -28*S + fs//2 ≈ -31*S
+
         er   = int(24*S)  # радіус ока
         pr   = int(13*S)  # зіниця
 
@@ -649,20 +650,21 @@ def draw_face(draw, fi, cx, facing_right, emotion, talking, facing_camera=False)
         draw.ellipse([nx-3, HEAD_CY+int(12*S), nx+3, HEAD_CY+int(20*S)],
                      fill=(188,148,128))
     else:
-        # Ніс профілем — трикутник на краю голови
-        nose_x = cx + (int(38*S) if facing_right else -int(38*S))
+        # Ніс профілем — трикутник на САМОМУ краю голови (виступає вперед)
+        nose_x = cx + (int(58*S) if facing_right else -int(58*S))  # було 38*S
         nose_y = HEAD_CY + int(18*S)
+        nose_tip = cx + (int(78*S) if facing_right else -int(78*S))  # вістря носа ще далі
         if facing_right:
             draw.polygon([
-                (nose_x - int(6*S), HEAD_CY + int(10*S)),
-                (nose_x + int(14*S), nose_y),
-                (nose_x - int(6*S), HEAD_CY + int(26*S)),
+                (nose_x - int(8*S), HEAD_CY + int(10*S)),  # основа носа
+                (nose_tip, nose_y),                         # вістря носа
+                (nose_x - int(8*S), HEAD_CY + int(26*S)),  # основа носа знизу
             ], fill=(188,148,128), outline=STICK_LINE, width=2)
         else:
             draw.polygon([
-                (nose_x + int(6*S), HEAD_CY + int(10*S)),
-                (nose_x - int(14*S), nose_y),
-                (nose_x + int(6*S), HEAD_CY + int(26*S)),
+                (nose_x + int(8*S), HEAD_CY + int(10*S)),  # основа носа
+                (nose_tip, nose_y),                         # вістря носа
+                (nose_x + int(8*S), HEAD_CY + int(26*S)),  # основа носа знизу
             ], fill=(188,148,128), outline=STICK_LINE, width=2)
 
     # ── Рот ──
@@ -867,38 +869,69 @@ def draw_char(draw, fi, cx, char_id, walking=False, direction=0, talking=False, 
         lift   = int(16*S)
 
         if is_profile:
-            # Ходьба боком (профіль) — ноги одна перед одною з колінами
-            # Кут нахилу ноги — менший щоб не перехрещувались
-            leg_swing = math.sin(phase) * 22  # кут гойдання в градусах
+            # Ходьба боком (профіль) — ПРАВИЛЬНИЙ WALK CYCLE з 4 фазами
+            # Фази: contact → recoil → passing → high point (цикл 360°)
+            # Використовуємо sin/cos для плавного переходу між позиціями
             
             # Довжина сегментів ноги
             thigh_len = int(65*S)  # стегно
             shin_len  = int(65*S)  # гомілка
             
-            # Конвертуємо кут в радіани для обчислень
-            rad = math.radians(leg_swing)
+            # Кут гойдання ноги вперед-назад (±25° максимум)
+            leg_angle = math.sin(phase) * 25
             
-            # Ліва нога (задня) — виходить з лівого боку тіла
-            lhip_x = cx - int(LEG_W)
-            lhip_y = HIP_Y + 6
-            lknee_x = lhip_x + int(math.sin(rad) * thigh_len)
-            lknee_y = lhip_y + int(math.cos(rad) * thigh_len)
-            lfoot_x = lhip_x + int(math.sin(rad) * (thigh_len + shin_len))
-            lfoot_y = GROUND_Y - max(0, math.sin(phase)) * lift
+            # Передня нога (права якщо дивиться вправо)
+            # Завжди малюється ПЕРШОЮ щоб була ПОЗАДУ (глибше)
+            front_leg_first = facing_right  # яка нога попереду
             
-            # Права нога (передня) — виходить з правого боку тіла
-            rhip_x = cx + int(LEG_W)
-            rhip_y = HIP_Y + 6
-            r_rad = math.radians(-leg_swing)  # протифаза
-            rknee_x = rhip_x + int(math.sin(r_rad) * thigh_len)
-            rknee_y = rhip_y + int(math.cos(r_rad) * thigh_len)
-            rfoot_x = rhip_x + int(math.sin(r_rad) * (thigh_len + shin_len))
-            rfoot_y = GROUND_Y - max(0, math.sin(phase + math.pi)) * lift
+            # Ліва нога (задня/передня залежно від напрямку)
+            l_phase = phase
+            r_phase = phase + math.pi  # протифаза
             
-            lknee = (lknee_x, lknee_y)
-            lfoot = (lfoot_x, lfoot_y)
-            rknee = (rknee_x, rknee_y)
-            rfoot = (rfoot_x, rfoot_y)
+            # Функція для обчислення позиції коліна та стопи
+            def calc_leg_pos(base_x, phase_angle, is_front_leg):
+                # Кут нахилу стегна (гойдання вперед-назад)
+                thigh_angle = math.sin(phase_angle) * 25  # ±25°
+                
+                # Підйом коліна — максимальний коли нога проходить повз іншу
+                # Використовуємо cos для підйому — максимум коли sin≈0
+                knee_lift = max(0, math.cos(phase_angle)) * lift * 1.2
+                
+                # П'ята піднімається коли нога позаду
+                heel_lift = max(0, -math.sin(phase_angle)) * lift * 0.8
+                
+                # Коліно завжди зігнуте коли нога піднімається
+                knee_bend = max(0, math.cos(phase_angle)) * 15  # додатковий згин коліна
+                
+                # Обчислюємо позицію коліна
+                knee_x = base_x + int(math.sin(math.radians(thigh_angle)) * thigh_len)
+                knee_y = HIP_Y + 6 + thigh_len - knee_lift
+                
+                # Обчислюємо позицію стопи
+                # Стопа зміщується вперед коли коліно піднімається
+                foot_x = base_x + int(math.sin(math.radians(thigh_angle + knee_bend)) * (thigh_len + shin_len * 0.9))
+                foot_y = GROUND_Y - knee_lift * 0.6 - heel_lift
+                
+                return (knee_x, knee_y), (foot_x, foot_y)
+            
+            # Базова позиція стегон (трохи розведені в сторони для профілю)
+            lhip_base = cx - int(LEG_W * 0.5)  # ліве стегно трохи позаду
+            rhip_base = cx + int(LEG_W * 0.5)  # праве стегно трохи попереду
+            
+            # Обчислюємо позиції ніг
+            lknee, lfoot = calc_leg_pos(lhip_base, l_phase, is_front_leg=False)
+            rknee, rfoot = calc_leg_pos(rhip_base, r_phase, is_front_leg=True)
+            
+            # Визначаємо яка нога малюється першою (та що позаду)
+            # Нога що позаду малюється ПЕРШОЮ, потім тіло, потім нога що попереду
+            if lfoot[0] < rfoot[0]:
+                # Ліва нога позаду — малюється першою
+                pass  # порядок вже правильний
+            else:
+                # Права нога позаду — треба поміняти місцями
+                lknee, rknee = rknee, lknee
+                lfoot, rfoot = rfoot, lfoot
+                lhip_base, rhip_base = rhip_base, lhip_base
         else:
             # Фронтально — ноги в сторони
             dir_m  = 1 if facing_right else -1
@@ -924,18 +957,65 @@ def draw_char(draw, fi, cx, char_id, walking=False, direction=0, talking=False, 
             rknee = (cx+int(48*S), HIP_Y+int(85*S))
             rfoot = (cx+int(48*S), GROUND_Y)
 
-    lhip = (cx-hip_w//2, HIP_Y+6)
-    rhip = (cx+hip_w//2, HIP_Y+6)
-    _limb(draw, [lhip,lknee], STICK_LINE, LEG_W)
-    _limb(draw, [lknee,lfoot], STICK_LINE, LEG_W)
-    _limb(draw, [rhip,rknee], STICK_LINE, LEG_W)
-    _limb(draw, [rknee,rfoot], STICK_LINE, LEG_W)
+    # ── Малювання ніг — спочатку задня, потім передня ──
     shoe  = int(34*S)
     r_sh  = max(3, int(4*S))
-    draw.rounded_rectangle([lfoot[0]-shoe, lfoot[1]-5, lfoot[0]+shoe//3, lfoot[1]+10],
-                            radius=r_sh, fill=STICK_LINE)
-    draw.rounded_rectangle([rfoot[0]-shoe//3, rfoot[1]-5, rfoot[0]+shoe, rfoot[1]+10],
-                            radius=r_sh, fill=STICK_LINE)
+    
+    if is_profile and walking:
+        # Для профілю визначаємо яка нога позаду
+        # Нога що має менший X (якщо дивиться вправо) або більший X (якщо вліво) — позаду
+        if facing_right:
+            back_leg = 'left' if lfoot[0] < rfoot[0] else 'right'
+        else:
+            back_leg = 'right' if rfoot[0] > lfoot[0] else 'left'
+        
+        # Задня нога — трохи темніша (в тіні)
+        back_col = (35, 35, 35)  # темніший за STICK_LINE
+        front_col = STICK_LINE
+        
+        # Малюємо спочатку задню ногу
+        if back_leg == 'left':
+            # Ліва нога позаду — малюємо першою
+            lhip_pt = (cx - int(LEG_W * 0.5), HIP_Y + 6)
+            _limb(draw, [lhip_pt, lknee], back_col, LEG_W)
+            _limb(draw, [lknee, lfoot], back_col, LEG_W)
+            draw.rounded_rectangle([lfoot[0]-shoe, lfoot[1]-5, lfoot[0]+shoe//3, lfoot[1]+10],
+                                   radius=r_sh, fill=back_col)
+        else:
+            # Права нога позаду — малюємо першою
+            rhip_pt = (cx + int(LEG_W * 0.5), HIP_Y + 6)
+            _limb(draw, [rhip_pt, rknee], back_col, LEG_W)
+            _limb(draw, [rknee, rfoot], back_col, LEG_W)
+            draw.rounded_rectangle([rfoot[0]-shoe//3, rfoot[1]-5, rfoot[0]+shoe, rfoot[1]+10],
+                                   radius=r_sh, fill=back_col)
+        
+        # Потім передню ногу (вже намальовано куртку вище)
+        if back_leg == 'left':
+            # Права нога попереду — малюємо другою
+            rhip_pt = (cx + int(LEG_W * 0.5), HIP_Y + 6)
+            _limb(draw, [rhip_pt, rknee], front_col, LEG_W)
+            _limb(draw, [rknee, rfoot], front_col, LEG_W)
+            draw.rounded_rectangle([rfoot[0]-shoe//3, rfoot[1]-5, rfoot[0]+shoe, rfoot[1]+10],
+                                   radius=r_sh, fill=front_col)
+        else:
+            # Ліва нога попереду — малюємо другою
+            lhip_pt = (cx - int(LEG_W * 0.5), HIP_Y + 6)
+            _limb(draw, [lhip_pt, lknee], front_col, LEG_W)
+            _limb(draw, [lknee, lfoot], front_col, LEG_W)
+            draw.rounded_rectangle([lfoot[0]-shoe, lfoot[1]-5, lfoot[0]+shoe//3, lfoot[1]+10],
+                                   radius=r_sh, fill=front_col)
+    else:
+        # Фронтально або стоячи — малюємо обидві ноги
+        lhip = (cx-hip_w//2, HIP_Y+6)
+        rhip = (cx+hip_w//2, HIP_Y+6)
+        _limb(draw, [lhip,lknee], STICK_LINE, LEG_W)
+        _limb(draw, [lknee,lfoot], STICK_LINE, LEG_W)
+        _limb(draw, [rhip,rknee], STICK_LINE, LEG_W)
+        _limb(draw, [rknee,rfoot], STICK_LINE, LEG_W)
+        draw.rounded_rectangle([lfoot[0]-shoe, lfoot[1]-5, lfoot[0]+shoe//3, lfoot[1]+10],
+                                radius=r_sh, fill=STICK_LINE)
+        draw.rounded_rectangle([rfoot[0]-shoe//3, rfoot[1]-5, rfoot[0]+shoe, rfoot[1]+10],
+                                radius=r_sh, fill=STICK_LINE)
 
     # ── Голова — профіль або фронтально ──
     if is_profile:
