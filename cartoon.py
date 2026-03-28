@@ -26,7 +26,7 @@ except ImportError:
 #
 #   1280 × 720 (16:9) — стандарт мультиків (South Park, Family Guy...)
 #   Персонажі ~35% висоти кадру — пропорційні будівлям на фоні
-#   VERSION: 2026-03-28-profile-fix-nose-eye-walk
+#   VERSION: 2026-03-28-walk-cycle-8frames
 #
 W, H       = 1280, 720
 FPS        = 25
@@ -864,74 +864,77 @@ def draw_char(draw, fi, cx, char_id, walking=False, direction=0, talking=False, 
 
     # ── Ноги ──
     if walking:
-        phase  = fi * 0.22
-        stride = int(40*S)
-        lift   = int(16*S)
-
+        # 8-кадровий WALK CYCLE (side view) — 4 основні позиції × 2 кадри
+        # Кадр 1-2: Contact — ноги найтепліше, передня нога пряма
+        # Кадр 3-4: Down — коліно зігнуте, задня нога піднімається
+        # Кадр 5-6: Passing — нога проходить повз (коліно високо)
+        # Кадр 7-8: Up — передня нога попереду, задня на носку
+        
+        cycle = fi % 8  # 0..7
+        stride = int(35*S)
+        lift   = int(18*S)  # висота підйому коліна
+        
         if is_profile:
-            # Ходьба боком (профіль) — ПРАВИЛЬНИЙ WALK CYCLE з 4 фазами
-            # Фази: contact → recoil → passing → high point (цикл 360°)
-            # Використовуємо sin/cos для плавного переходу між позиціями
+            # Ходьба боком (профіль) — 8 кадрів
             
             # Довжина сегментів ноги
             thigh_len = int(65*S)  # стегно
             shin_len  = int(65*S)  # гомілка
             
-            # Кут гойдання ноги вперед-назад (±25° максимум)
-            leg_angle = math.sin(phase) * 25
+            # Базова позиція стегон (трохи розведені)
+            lhip_x = cx - int(LEG_W * 0.5)
+            rhip_x = cx + int(LEG_W * 0.5)
+            hip_y  = HIP_Y + 6
             
-            # Передня нога (права якщо дивиться вправо)
-            # Завжди малюється ПЕРШОЮ щоб була ПОЗАДУ (глибше)
-            front_leg_first = facing_right  # яка нога попереду
+            if cycle == 0 or cycle == 1:
+                # CONTACT — права нога попереду
+                # Ліва нога (задня) — зігнута, стопа на землі
+                lknee = (lhip_x, hip_y + thigh_len)
+                lfoot = (lhip_x - int(stride*0.3), GROUND_Y)
+                
+                # Права нога (передня) — пряма, п'ята торкається
+                rknee = (rhip_x + int(stride*0.2), hip_y + thigh_len - int(lift*0.3))
+                rfoot = (rhip_x + stride, GROUND_Y)
+                
+            elif cycle == 2 or cycle == 3:
+                # DOWN — вага на передній нозі, коліно зігнуте
+                # Ліва нога (задня) — піднімається на носку
+                lknee = (lhip_x - int(stride*0.15), hip_y + thigh_len - int(lift*0.2))
+                lfoot = (lhip_x - int(stride*0.4), GROUND_Y - int(lift*0.5))
+                
+                # Права нога (передня) — коліно зігнуте (амортизація)
+                rknee = (rhip_x + int(stride*0.3), hip_y + thigh_len - int(lift*0.5))
+                rfoot = (rhip_x + stride, GROUND_Y)
+                
+            elif cycle == 4 or cycle == 5:
+                # PASSING — ліва нога проходить повз праву
+                # Ліва нога — високо піднята, коліно вперед
+                lknee = (lhip_x + int(stride*0.4), hip_y + thigh_len - lift)
+                lfoot = (lhip_x + int(stride*0.2), GROUND_Y - int(lift*0.8))
+                
+                # Права нога — пряма, вага на ній
+                rknee = (rhip_x + int(stride*0.1), hip_y + thigh_len - int(lift*0.2))
+                rfoot = (rhip_x + int(stride*0.5), GROUND_Y)
+                
+            elif cycle == 6 or cycle == 7:
+                # UP — ліва нога попереду, права на носку
+                # Ліва нога — попереду, пряма
+                lknee = (lhip_x + int(stride*0.3), hip_y + thigh_len - int(lift*0.3))
+                lfoot = (lhip_x + stride, GROUND_Y)
+                
+                # Права нога (задня) — на носку, зігнута
+                rknee = (rhip_x - int(stride*0.1), hip_y + thigh_len - int(lift*0.2))
+                rfoot = (rhip_x - int(stride*0.3), GROUND_Y - int(lift*0.4))
             
-            # Ліва нога (задня/передня залежно від напрямку)
-            l_phase = phase
-            r_phase = phase + math.pi  # протифаза
-            
-            # Функція для обчислення позиції коліна та стопи
-            def calc_leg_pos(base_x, phase_angle, is_front_leg):
-                # Кут нахилу стегна (гойдання вперед-назад)
-                thigh_angle = math.sin(phase_angle) * 25  # ±25°
-                
-                # Підйом коліна — максимальний коли нога проходить повз іншу
-                # Використовуємо cos для підйому — максимум коли sin≈0
-                knee_lift = max(0, math.cos(phase_angle)) * lift * 1.2
-                
-                # П'ята піднімається коли нога позаду
-                heel_lift = max(0, -math.sin(phase_angle)) * lift * 0.8
-                
-                # Коліно завжди зігнуте коли нога піднімається
-                knee_bend = max(0, math.cos(phase_angle)) * 15  # додатковий згин коліна
-                
-                # Обчислюємо позицію коліна
-                knee_x = base_x + int(math.sin(math.radians(thigh_angle)) * thigh_len)
-                knee_y = HIP_Y + 6 + thigh_len - knee_lift
-                
-                # Обчислюємо позицію стопи
-                # Стопа зміщується вперед коли коліно піднімається
-                foot_x = base_x + int(math.sin(math.radians(thigh_angle + knee_bend)) * (thigh_len + shin_len * 0.9))
-                foot_y = GROUND_Y - knee_lift * 0.6 - heel_lift
-                
-                return (knee_x, knee_y), (foot_x, foot_y)
-            
-            # Базова позиція стегон (трохи розведені в сторони для профілю)
-            lhip_base = cx - int(LEG_W * 0.5)  # ліве стегно трохи позаду
-            rhip_base = cx + int(LEG_W * 0.5)  # праве стегно трохи попереду
-            
-            # Обчислюємо позиції ніг
-            lknee, lfoot = calc_leg_pos(lhip_base, l_phase, is_front_leg=False)
-            rknee, rfoot = calc_leg_pos(rhip_base, r_phase, is_front_leg=True)
-            
-            # Визначаємо яка нога малюється першою (та що позаду)
-            # Нога що позаду малюється ПЕРШОЮ, потім тіло, потім нога що попереду
-            if lfoot[0] < rfoot[0]:
-                # Ліва нога позаду — малюється першою
-                pass  # порядок вже правильний
-            else:
-                # Права нога позаду — треба поміняти місцями
+            # Якщо дивиться вліво — дзеркально відображаємо
+            if not facing_right:
+                lknee = (cx - (lknee[0] - cx), lknee[1])
+                lfoot = (cx - (lfoot[0] - cx), lfoot[1])
+                rknee = (cx - (rknee[0] - cx), rknee[1])
+                rfoot = (cx - (rfoot[0] - cx), rfoot[1])
+                # Міняємо ноги місцями
                 lknee, rknee = rknee, lknee
                 lfoot, rfoot = rfoot, lfoot
-                lhip_base, rhip_base = rhip_base, lhip_base
         else:
             # Фронтально — ноги в сторони
             dir_m  = 1 if facing_right else -1
