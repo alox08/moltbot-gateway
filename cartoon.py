@@ -26,7 +26,7 @@ except ImportError:
 #
 #   1280 × 720 (16:9) — стандарт мультиків (South Park, Family Guy...)
 #   Персонажі ~35% висоти кадру — пропорційні будівлям на фоні
-#   VERSION: 2026-03-28-walk-cycle-8frames
+#   VERSION: 2026-03-28-walk-slower-higher-knee
 #
 W, H       = 1280, 720
 FPS        = 25
@@ -870,9 +870,9 @@ def draw_char(draw, fi, cx, char_id, walking=False, direction=0, talking=False, 
         # Кадр 5-6: Passing — нога проходить повз (коліно високо)
         # Кадр 7-8: Up — передня нога попереду, задня на носку
         
-        cycle = fi % 8  # 0..7
+        cycle = (fi // 2) % 8  # 0..7 (повільніше: кожен кадр триває 2 фрейми)
         stride = int(35*S)
-        lift   = int(28*S)  # висота підйому коліна (збільшено з 18*S)
+        lift   = int(38*S)  # висота підйому коліна (збільшено з 28*S)
         
         if is_profile:
             # Ходьба боком (профіль) — 8 кадрів
@@ -948,11 +948,18 @@ def draw_char(draw, fi, cx, char_id, walking=False, direction=0, talking=False, 
             rfoot  = (cx+int(48*S)+int(r_sw),       GROUND_Y-int(r_li))
     else:
         if is_profile:
-            # Профіль стоячи — ноги поруч (одна за одною)
-            lknee  = (cx - int(LEG_W), HIP_Y+int(85*S))
-            lfoot  = (cx - int(LEG_W), GROUND_Y)
-            rknee  = (cx + int(LEG_W), HIP_Y+int(85*S))
-            rfoot  = (cx + int(LEG_W), GROUND_Y)
+            # Профіль стоячи — ТІЛЬКИ ОДНА нога (передня)
+            # Права нога попереду якщо дивиться вправо
+            if facing_right:
+                rknee  = (cx + int(LEG_W), HIP_Y+int(85*S))
+                rfoot  = (cx + int(LEG_W), GROUND_Y)
+                lknee = None  # задня нога не малюється
+                lfoot = None
+            else:
+                lknee  = (cx - int(LEG_W), HIP_Y+int(85*S))
+                lfoot  = (cx - int(LEG_W), GROUND_Y)
+                rknee = None  # задня нога не малюється
+                rfoot = None
         else:
             # Фронтально — ноги на ширині плечей
             lknee = (cx-int(48*S), HIP_Y+int(85*S))
@@ -1009,16 +1016,32 @@ def draw_char(draw, fi, cx, char_id, walking=False, direction=0, talking=False, 
                                    radius=r_sh, fill=front_col)
     else:
         # Фронтально або стоячи — малюємо обидві ноги
-        lhip = (cx-hip_w//2, HIP_Y+6)
-        rhip = (cx+hip_w//2, HIP_Y+6)
-        _limb(draw, [lhip,lknee], STICK_LINE, LEG_W)
-        _limb(draw, [lknee,lfoot], STICK_LINE, LEG_W)
-        _limb(draw, [rhip,rknee], STICK_LINE, LEG_W)
-        _limb(draw, [rknee,rfoot], STICK_LINE, LEG_W)
-        draw.rounded_rectangle([lfoot[0]-shoe, lfoot[1]-5, lfoot[0]+shoe//3, lfoot[1]+10],
-                                radius=r_sh, fill=STICK_LINE)
-        draw.rounded_rectangle([rfoot[0]-shoe//3, rfoot[1]-5, rfoot[0]+shoe, rfoot[1]+10],
-                                radius=r_sh, fill=STICK_LINE)
+        if is_profile:
+            # Профіль стоячи — тільки одна нога (передня)
+            if facing_right:
+                rhip_pt = (cx + int(LEG_W * 0.5), HIP_Y + 6)
+                _limb(draw, [rhip_pt, rknee], STICK_LINE, LEG_W)
+                _limb(draw, [rknee, rfoot], STICK_LINE, LEG_W)
+                draw.rounded_rectangle([rfoot[0]-shoe//3, rfoot[1]-5, rfoot[0]+shoe, rfoot[1]+10],
+                                       radius=r_sh, fill=STICK_LINE)
+            else:
+                lhip_pt = (cx - int(LEG_W * 0.5), HIP_Y + 6)
+                _limb(draw, [lhip_pt, lknee], STICK_LINE, LEG_W)
+                _limb(draw, [lknee, lfoot], STICK_LINE, LEG_W)
+                draw.rounded_rectangle([lfoot[0]-shoe, lfoot[1]-5, lfoot[0]+shoe//3, lfoot[1]+10],
+                                       radius=r_sh, fill=STICK_LINE)
+        else:
+            # Фронтально — ноги на ширині плечей
+            lhip = (cx-hip_w//2, HIP_Y+6)
+            rhip = (cx+hip_w//2, HIP_Y+6)
+            _limb(draw, [lhip,lknee], STICK_LINE, LEG_W)
+            _limb(draw, [lknee,lfoot], STICK_LINE, LEG_W)
+            _limb(draw, [rhip,rknee], STICK_LINE, LEG_W)
+            _limb(draw, [rknee,rfoot], STICK_LINE, LEG_W)
+            draw.rounded_rectangle([lfoot[0]-shoe, lfoot[1]-5, lfoot[0]+shoe//3, lfoot[1]+10],
+                                    radius=r_sh, fill=STICK_LINE)
+            draw.rounded_rectangle([rfoot[0]-shoe//3, rfoot[1]-5, rfoot[0]+shoe, rfoot[1]+10],
+                                    radius=r_sh, fill=STICK_LINE)
 
     # ── Голова — профіль або фронтально ──
     if is_profile:
