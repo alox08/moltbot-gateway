@@ -872,7 +872,7 @@ def draw_char(draw, fi, cx, char_id, walking=False, direction=0, talking=False, 
         
         cycle = (fi // 2) % 8  # 0..7 (повільніше: кожен кадр триває 2 фрейми)
         stride = int(35*S)
-        lift   = int(38*S)  # висота підйому коліна (збільшено з 28*S)
+        lift   = int(55*S)  # висота підйому коліна (збільшено з 38*S)
         
         if is_profile:
             # Ходьба боком (профіль) — 8 кадрів
