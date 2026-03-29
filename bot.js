@@ -232,19 +232,19 @@ Close-up сцена — крупний план:
 
 // Швидкі моделі — для чату та оркестратора
 const MODELS = [
+  'nvidia/nemotron-3-super-120b-a12b:free',
   'meta-llama/llama-3.3-70b-instruct:free',
   'google/gemma-3-27b-it:free',
-  'nvidia/nemotron-3-super-120b-a12b:free',
   'qwen/qwen3-235b-a22b:free',
   'openrouter/free',   // авто-роутер — сам обирає доступну безкоштовну модель
 ];
 
 // Розумні моделі — для субагентів (/shorts, /story, /stickman)
 const MODELS_SMART = [
+  'nvidia/nemotron-3-super-120b-a12b:free',
   'meta-llama/llama-3.3-70b-instruct:free',
   'google/gemma-3-27b-it:free',
   'qwen/qwen3-235b-a22b:free',
-  'nvidia/nemotron-3-super-120b-a12b:free',
   'openrouter/free',
 ];
 
