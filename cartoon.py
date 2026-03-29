@@ -68,8 +68,11 @@ HIP_Y    = NECK_Y  + int(165 * S)    # = 482
 ARM_LEN  = int(90  * S)   # = 43
 SHIRT_W  = int(62  * S)   # = 29
 SLEEVE_W = max(8,  int(17 * S))   # = 8
-LEG_W    = max(7,  int(18 * S))   # = 8
+LEG_W    = max(5,  int(14 * S))   # = 7 (тонші ноги)
 LW       = max(4,  int(9  * S))   # = 4
+ANKLE    = max(3,  int(10 * S))   # = 5 (щиколотка)
+FOOT_L   = int(32 * S)            # = 17 (довжина ступні)
+FOOT_H   = int(12 * S)            # = 6  (висота ступні)
 
 # ─── Слоти позицій (1280px) ───────────────────────────────────────────────────
 
@@ -967,10 +970,46 @@ def draw_char(draw, fi, cx, char_id, walking=False, direction=0, talking=False, 
             rknee = (cx+int(48*S), HIP_Y+int(85*S))
             rfoot = (cx+int(48*S), GROUND_Y)
 
-    # ── Малювання ніг — спочатку задня, потім передня ──
-    shoe  = int(34*S)
-    r_sh  = max(3, int(4*S))
+# ─── Ступня ───────────────────────────────────────────────────────────────────
+
+def draw_foot(draw, ankle_x, ankle_y, color, facing_right=None, is_left=True):
+    """
+    Малює ступню з п'ятою та носком.
+    ankle_x, ankle_y — позиція щиколотки
+    facing_right: None=фронтально, True=праворуч, False=ліворуч
+    is_left: ліва чи права нога (для фронтального вигляду)
+    """
+    # Визначаємо напрямок ступні
+    if facing_right is True:
+        direction = 1  # вправо
+    elif facing_right is False:
+        direction = -1  # вліво
+    else:
+        # Фронтально: ліва нога дивиться вліво, права вправо
+        direction = 1 if is_left else -1
     
+    # П'ята та носок
+    heel_x = ankle_x - direction * 6
+    toe_x = ankle_x + direction * FOOT_L
+    
+    # Ступня як полігон (п'ята → носок → верх)
+    foot_pts = [
+        (heel_x, ankle_y - 2),                    # п'ята ззаду зверху
+        (toe_x, ankle_y + 2),                     # носок спереду зверху
+        (toe_x, ankle_y + FOOT_H),                # низ під пальцями
+        (heel_x + 4, ankle_y + FOOT_H + 2),       # низ п'яти (заокруглений)
+        (heel_x - 2, ankle_y + FOOT_H - 2),       # п'ята ззаду знизу
+    ]
+    draw.polygon(foot_pts, fill=color, outline=STICK_LINE, width=2)
+    
+    # Кісточка (виступає збоку)
+    ankle_offset = direction * 3
+    draw.ellipse([ankle_x + ankle_offset - 3, ankle_y - 4,
+                  ankle_x + ankle_offset + 3, ankle_y + 4],
+                 fill=tuple(max(0, c - 30) for c in color))
+
+# ── Малювання ніг — спочатку задня, потім передня ─────────────────────────────
+
     if is_profile and walking:
         # Для профілю визначаємо яка нога позаду
         # Нога що має менший X (якщо дивиться вправо) або більший X (якщо вліво) — позаду
@@ -978,42 +1017,38 @@ def draw_char(draw, fi, cx, char_id, walking=False, direction=0, talking=False, 
             back_leg = 'left' if lfoot[0] < rfoot[0] else 'right'
         else:
             back_leg = 'right' if rfoot[0] > lfoot[0] else 'left'
-        
+
         # Задня нога — трохи темніша (в тіні)
         back_col = (35, 35, 35)  # темніший за STICK_LINE
         front_col = STICK_LINE
-        
+
         # Малюємо спочатку задню ногу
         if back_leg == 'left':
             # Ліва нога позаду — малюємо першою
             lhip_pt = (cx - int(LEG_W * 0.5), HIP_Y + 6)
             _limb(draw, [lhip_pt, lknee], back_col, LEG_W)
             _limb(draw, [lknee, lfoot], back_col, LEG_W)
-            draw.rounded_rectangle([lfoot[0]-shoe, lfoot[1]-5, lfoot[0]+shoe//3, lfoot[1]+10],
-                                   radius=r_sh, fill=back_col)
+            draw_foot(draw, lfoot[0], lfoot[1], back_col, facing_right=facing_right, is_left=True)
         else:
             # Права нога позаду — малюємо першою
             rhip_pt = (cx + int(LEG_W * 0.5), HIP_Y + 6)
             _limb(draw, [rhip_pt, rknee], back_col, LEG_W)
             _limb(draw, [rknee, rfoot], back_col, LEG_W)
-            draw.rounded_rectangle([rfoot[0]-shoe//3, rfoot[1]-5, rfoot[0]+shoe, rfoot[1]+10],
-                                   radius=r_sh, fill=back_col)
-        
+            draw_foot(draw, rfoot[0], rfoot[1], back_col, facing_right=facing_right, is_left=False)
+
         # Потім передню ногу (вже намальовано куртку вище)
         if back_leg == 'left':
             # Права нога попереду — малюємо другою
             rhip_pt = (cx + int(LEG_W * 0.5), HIP_Y + 6)
             _limb(draw, [rhip_pt, rknee], front_col, LEG_W)
             _limb(draw, [rknee, rfoot], front_col, LEG_W)
-            draw.rounded_rectangle([rfoot[0]-shoe//3, rfoot[1]-5, rfoot[0]+shoe, rfoot[1]+10],
-                                   radius=r_sh, fill=front_col)
+            draw_foot(draw, rfoot[0], rfoot[1], front_col, facing_right=facing_right, is_left=False)
         else:
             # Ліва нога попереду — малюємо другою
             lhip_pt = (cx - int(LEG_W * 0.5), HIP_Y + 6)
             _limb(draw, [lhip_pt, lknee], front_col, LEG_W)
             _limb(draw, [lknee, lfoot], front_col, LEG_W)
-            draw.rounded_rectangle([lfoot[0]-shoe, lfoot[1]-5, lfoot[0]+shoe//3, lfoot[1]+10],
-                                   radius=r_sh, fill=front_col)
+            draw_foot(draw, lfoot[0], lfoot[1], front_col, facing_right=facing_right, is_left=True)
     else:
         # Фронтально або стоячи — малюємо обидві ноги
         if is_profile:
@@ -1022,14 +1057,12 @@ def draw_char(draw, fi, cx, char_id, walking=False, direction=0, talking=False, 
                 rhip_pt = (cx + int(LEG_W * 0.5), HIP_Y + 6)
                 _limb(draw, [rhip_pt, rknee], STICK_LINE, LEG_W)
                 _limb(draw, [rknee, rfoot], STICK_LINE, LEG_W)
-                draw.rounded_rectangle([rfoot[0]-shoe//3, rfoot[1]-5, rfoot[0]+shoe, rfoot[1]+10],
-                                       radius=r_sh, fill=STICK_LINE)
+                draw_foot(draw, rfoot[0], rfoot[1], STICK_LINE, facing_right=facing_right, is_left=False)
             else:
                 lhip_pt = (cx - int(LEG_W * 0.5), HIP_Y + 6)
                 _limb(draw, [lhip_pt, lknee], STICK_LINE, LEG_W)
                 _limb(draw, [lknee, lfoot], STICK_LINE, LEG_W)
-                draw.rounded_rectangle([lfoot[0]-shoe, lfoot[1]-5, lfoot[0]+shoe//3, lfoot[1]+10],
-                                       radius=r_sh, fill=STICK_LINE)
+                draw_foot(draw, lfoot[0], lfoot[1], STICK_LINE, facing_right=facing_right, is_left=True)
         else:
             # Фронтально — ноги на ширині плечей
             lhip = (cx-hip_w//2, HIP_Y+6)
@@ -1038,10 +1071,8 @@ def draw_char(draw, fi, cx, char_id, walking=False, direction=0, talking=False, 
             _limb(draw, [lknee,lfoot], STICK_LINE, LEG_W)
             _limb(draw, [rhip,rknee], STICK_LINE, LEG_W)
             _limb(draw, [rknee,rfoot], STICK_LINE, LEG_W)
-            draw.rounded_rectangle([lfoot[0]-shoe, lfoot[1]-5, lfoot[0]+shoe//3, lfoot[1]+10],
-                                    radius=r_sh, fill=STICK_LINE)
-            draw.rounded_rectangle([rfoot[0]-shoe//3, rfoot[1]-5, rfoot[0]+shoe, rfoot[1]+10],
-                                    radius=r_sh, fill=STICK_LINE)
+            draw_foot(draw, lfoot[0], lfoot[1], STICK_LINE, facing_right=None, is_left=True)
+            draw_foot(draw, rfoot[0], rfoot[1], STICK_LINE, facing_right=None, is_left=False)
 
     # ── Голова — профіль або фронтально ──
     if is_profile:
