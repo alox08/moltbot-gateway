@@ -235,8 +235,6 @@ const MODELS = [
   'nousresearch/hermes-3-llama-3.1-405b:free',  // 405B — найсильніша
   'openai/gpt-oss-120b:free',                   // OpenAI open-source
   'nvidia/nemotron-3-super-120b-a12b:free',
-  'meta-llama/llama-3.3-70b-instruct:free',
-  'google/gemma-3-27b-it:free',
   'qwen/qwen3-235b-a22b:free',
   'mistralai/mistral-small-3.1-24b-instruct:free',  // стабільна Mistral
   'openrouter/free',   // авто-роутер — сам обирає доступну безкоштовну модель
@@ -247,8 +245,6 @@ const MODELS_SMART = [
   'nousresearch/hermes-3-llama-3.1-405b:free',  // 405B — найсильніша
   'openai/gpt-oss-120b:free',                   // OpenAI open-source
   'nvidia/nemotron-3-super-120b-a12b:free',
-  'meta-llama/llama-3.3-70b-instruct:free',
-  'google/gemma-3-27b-it:free',
   'qwen/qwen3-235b-a22b:free',
   'mistralai/mistral-small-3.1-24b-instruct:free',  // стабільна Mistral
   'openrouter/free',
