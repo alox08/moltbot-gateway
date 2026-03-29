@@ -253,6 +253,9 @@ let lastUsedModel = MODELS[0];
 async function callLLMWithList(models, messages, maxTokens = 2000) {
   for (const model of models) {
     try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 30000); // 30 сек таймаут
+      
       const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -262,7 +265,9 @@ async function callLLMWithList(models, messages, maxTokens = 2000) {
           'X-Title': 'MoltBot',
         },
         body: JSON.stringify({ model, messages, max_tokens: maxTokens }),
+        signal: controller.signal,
       });
+      clearTimeout(timeout);
       const data = await res.json();
       if (data.error) {
         console.warn(`⚠️ ${model} — помилка: ${data.error.code} ${data.error.message?.substring(0, 80)}`);
