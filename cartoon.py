@@ -596,31 +596,28 @@ def draw_face(draw, fi, cx, facing_right, emotion, talking, facing_camera=False)
     is_profile = not facing_camera
     
     if facing_camera:
-        # Фронтально в камеру — два ока симетрично
+        # Фронтально в камеру — два ока симетрично (Loading Artist стиль — великі очі)
         fs    = 0
         ey    = HEAD_CY - int(10*S)
-        el_cx = cx - int(28*S)
-        er_cx = cx + int(28*S)
-        er_l  = int(25*S)
-        pr_l  = int(14*S)
-        er_r  = int(25*S)
-        pr_r  = int(14*S)
+        el_cx = cx - int(32*S)  # більше відстань між очима
+        er_cx = cx + int(32*S)
+        er_l  = int(32*S)       # більші очі (~50% обличчя)
+        pr_l  = int(18*S)       # більші зіниці
+        er_r  = int(32*S)
+        pr_r  = int(18*S)
     else:
         # Профіль — ТІЛЬКИ ОДНЕ ОКО (переднє)
         fs  = int(6*S) if facing_right else -int(6*S)
         ey  = HEAD_CY - int(10*S)
 
         # Для профілю: тільки одне око (переднє) — ЗСУНЕНО ВПЕРЕД на 3/4 від центру до краю
-        # Щоб око було виразніше видно в профіль
         if facing_right:
-            # Дивиться вправо — праве око (переднє) — зміщено на 3/4 до правого краю
-            eye_cx = cx + int(52*S)  # було 28*S + fs//2 ≈ 31*S
+            eye_cx = cx + int(52*S)
         else:
-            # Дивиться вліво — ліве око (переднє) — зміщено на 3/4 до лівого краю
-            eye_cx = cx - int(52*S)  # було -28*S + fs//2 ≈ -31*S
+            eye_cx = cx - int(52*S)
 
-        er   = int(24*S)  # радіус ока
-        pr   = int(13*S)  # зіниця
+        er   = int(28*S)  # радіус ока (збільшено)
+        pr   = int(16*S)  # зіниця (збільшено)
 
     # Surprised — злегка більші очі
     if emotion == 'surprised' and not facing_camera:
@@ -1293,6 +1290,8 @@ def render_scene(scene_def, scene_idx, initial_chars, work_dir):
                 else:
                     # Стоїть — фронтально до камери (як раніше)
                     direction = 0
+                    # Коли стоїть фронтально — обличчя в камеру з двома очима
+                    facing_camera = True
 
                 draw_char(draw, fi, int(cx_f), char_id,
                           walking=walking, direction=direction,
