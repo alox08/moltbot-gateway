@@ -183,6 +183,44 @@ def _limb(draw, pts, color, w):
     for x, y in pts:
         draw.ellipse([x-r, y-r, x+r, y+r], fill=color)
 
+# ─── Ступня ───────────────────────────────────────────────────────────────────
+
+def draw_foot(draw, ankle_x, ankle_y, color, facing_right=None, is_left=True):
+    """
+    Малює ступню з п'ятою та носком.
+    ankle_x, ankle_y — позиція щиколотки
+    facing_right: None=фронтально, True=праворуч, False=ліворуч
+    is_left: ліва чи права нога (для фронтального вигляду)
+    """
+    # Визначаємо напрямок ступні
+    if facing_right is True:
+        direction = 1  # вправо
+    elif facing_right is False:
+        direction = -1  # вліво
+    else:
+        # Фронтально: ліва нога дивиться вліво, права вправо
+        direction = 1 if is_left else -1
+
+    # П'ята та носок
+    heel_x = ankle_x - direction * 6
+    toe_x = ankle_x + direction * FOOT_L
+
+    # Ступня як полігон (п'ята → носок → верх)
+    foot_pts = [
+        (heel_x, ankle_y - 2),                    # п'ята ззаду зверху
+        (toe_x, ankle_y + 2),                     # носок спереду зверху
+        (toe_x, ankle_y + FOOT_H),                # низ під пальцями
+        (heel_x + 4, ankle_y + FOOT_H + 2),       # низ п'яти (заокруглений)
+        (heel_x - 2, ankle_y + FOOT_H - 2),       # п'ята ззаду знизу
+    ]
+    draw.polygon(foot_pts, fill=color, outline=STICK_LINE, width=2)
+
+    # Кісточка (виступає збоку)
+    ankle_offset = direction * 3
+    draw.ellipse([ankle_x + ankle_offset - 3, ankle_y - 4,
+                  ankle_x + ankle_offset + 3, ankle_y + 4],
+                 fill=tuple(max(0, c - 30) for c in color))
+
 # ─── Фони ─────────────────────────────────────────────────────────────────────
 
 def bg_street(draw, fi):
@@ -970,45 +1008,7 @@ def draw_char(draw, fi, cx, char_id, walking=False, direction=0, talking=False, 
             rknee = (cx+int(48*S), HIP_Y+int(85*S))
             rfoot = (cx+int(48*S), GROUND_Y)
 
-# ─── Ступня ───────────────────────────────────────────────────────────────────
-
-def draw_foot(draw, ankle_x, ankle_y, color, facing_right=None, is_left=True):
-    """
-    Малює ступню з п'ятою та носком.
-    ankle_x, ankle_y — позиція щиколотки
-    facing_right: None=фронтально, True=праворуч, False=ліворуч
-    is_left: ліва чи права нога (для фронтального вигляду)
-    """
-    # Визначаємо напрямок ступні
-    if facing_right is True:
-        direction = 1  # вправо
-    elif facing_right is False:
-        direction = -1  # вліво
-    else:
-        # Фронтально: ліва нога дивиться вліво, права вправо
-        direction = 1 if is_left else -1
-    
-    # П'ята та носок
-    heel_x = ankle_x - direction * 6
-    toe_x = ankle_x + direction * FOOT_L
-    
-    # Ступня як полігон (п'ята → носок → верх)
-    foot_pts = [
-        (heel_x, ankle_y - 2),                    # п'ята ззаду зверху
-        (toe_x, ankle_y + 2),                     # носок спереду зверху
-        (toe_x, ankle_y + FOOT_H),                # низ під пальцями
-        (heel_x + 4, ankle_y + FOOT_H + 2),       # низ п'яти (заокруглений)
-        (heel_x - 2, ankle_y + FOOT_H - 2),       # п'ята ззаду знизу
-    ]
-    draw.polygon(foot_pts, fill=color, outline=STICK_LINE, width=2)
-    
-    # Кісточка (виступає збоку)
-    ankle_offset = direction * 3
-    draw.ellipse([ankle_x + ankle_offset - 3, ankle_y - 4,
-                  ankle_x + ankle_offset + 3, ankle_y + 4],
-                 fill=tuple(max(0, c - 30) for c in color))
-
-# ── Малювання ніг — спочатку задня, потім передня ─────────────────────────────
+    # ── Малювання ніг — спочатку задня, потім передня ─────────────────────────────
 
     if is_profile and walking:
         # Для профілю визначаємо яка нога позаду
