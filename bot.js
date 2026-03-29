@@ -252,9 +252,12 @@ let lastUsedModel = MODELS[0];
 
 async function callLLMWithList(models, messages, maxTokens = 2000) {
   for (const model of models) {
+    const startTime = Date.now();
+    console.log(`🔄 Запит до ${model}...`);
+    
     try {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 30000); // 30 сек таймаут
+      const timeout = setTimeout(() => controller.abort(), 10000); // 10 сек таймаут
       
       const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
@@ -269,20 +272,23 @@ async function callLLMWithList(models, messages, maxTokens = 2000) {
       });
       clearTimeout(timeout);
       const data = await res.json();
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+      
       if (data.error) {
-        console.warn(`⚠️ ${model} — помилка: ${data.error.code} ${data.error.message?.substring(0, 80)}`);
+        console.warn(`⚠️ ${model} — помилка за ${elapsed}с: ${data.error.code} ${data.error.message?.substring(0, 80)}`);
         continue;
       }
       const raw = data.choices?.[0]?.message?.content?.trim();
       const content = raw ? raw.replace(/<think>[\s\S]*?<\/think>/g, '').trim() : '';
       if (content) {
-        console.log(`✅ Модель: ${model}`);
+        console.log(`✅ Модель: ${model} за ${elapsed}с`);
         lastUsedModel = model;
         return content;
       }
-      console.warn(`⚠️ ${model} — порожня відповідь`);
+      console.warn(`⚠️ ${model} — порожня відповідь за ${elapsed}с`);
     } catch (e) {
-      console.warn(`⚠️ ${model} помилка: ${e.message}`);
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+      console.warn(`⚠️ ${model} помилка за ${elapsed}с: ${e.message}`);
     }
   }
   return null;
