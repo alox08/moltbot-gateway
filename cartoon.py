@@ -1291,10 +1291,9 @@ def render_scene(scene_def, scene_idx, initial_chars, work_dir):
                     # При ходьбі — профіль (боком)
                     direction = 1 if facing_right else 2
                 else:
-                    # Стоїть — зберігаємо профіль якщо дивиться вліво/вправо
-                    # direction = 1 (праворуч) або 2 (ліворуч) для профілю
-                    direction = 1 if facing_right else 2
-                
+                    # Стоїть — фронтально до камери (як раніше)
+                    direction = 0
+
                 draw_char(draw, fi, int(cx_f), char_id,
                           walking=walking, direction=direction,
                           talking=is_talking, emotion=emo,
