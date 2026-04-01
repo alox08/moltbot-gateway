@@ -232,21 +232,21 @@ Close-up сцена — крупний план:
 
 // Швидкі моделі — для чату та оркестратора
 const MODELS = [
+  'nvidia/nemotron-3-super-120b-a12b:free',     // стабільна NVIDIA
   'nousresearch/hermes-3-llama-3.1-405b:free',  // 405B — найсильніша
   'openai/gpt-oss-120b:free',                   // OpenAI open-source
-  'nvidia/nemotron-3-super-120b-a12b:free',
-  'qwen/qwen3-235b-a22b:free',
-  'mistralai/mistral-small-3.1-24b-instruct:free',  // стабільна Mistral
-  'openrouter/free',   // авто-роутер — сам обирає доступну безкоштовну модель
+  'meta-llama/llama-3-70b-instruct:free',       // Llama 3 70B
+  'mistralai/mistral-7b-instruct:free',         // Mistral 7B стабільна
+  'openrouter/free',                            // авто-роутер
 ];
 
 // Розумні моделі — для субагентів (/shorts, /story, /stickman)
 const MODELS_SMART = [
+  'nvidia/nemotron-3-super-120b-a12b:free',     // стабільна NVIDIA
   'nousresearch/hermes-3-llama-3.1-405b:free',  // 405B — найсильніша
   'openai/gpt-oss-120b:free',                   // OpenAI open-source
-  'nvidia/nemotron-3-super-120b-a12b:free',
-  'qwen/qwen3-235b-a22b:free',
-  'mistralai/mistral-small-3.1-24b-instruct:free',  // стабільна Mistral
+  'meta-llama/llama-3-70b-instruct:free',       // Llama 3 70B
+  'mistralai/mistral-7b-instruct:free',         // Mistral 7B
   'openrouter/free',
 ];
 
