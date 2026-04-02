@@ -233,18 +233,16 @@ Close-up сцена — крупний план:
 
 // Швидкі моделі — для чату та оркестратора
 const MODELS = [
-  'meta-llama/llama-3-70b-instruct:free',       // Llama 3 70B — стабільна
-  'nvidia/nemotron-3-super-120b-a12b:free',     // NVIDIA Nemotron
-  'mistralai/mistral-7b-instruct:free',         // Mistral 7B стабільна
-  'openrouter/free',                            // авто-роутер
+  'openrouter/free',                            // авто-роутер — стабільний
+  'meta-llama/llama-3.1-8b-instruct:free',      // Llama 3.1 8B
+  'mistralai/mistral-7b-instruct:free',         // Mistral 7B (якщо працює)
 ];
 
 // Розумні моделі — для субагентів (/shorts, /story, /stickman)
 const MODELS_SMART = [
-  'meta-llama/llama-3-70b-instruct:free',       // Llama 3 70B — стабільна
-  'nvidia/nemotron-3-super-120b-a12b:free',     // NVIDIA Nemotron
-  'mistralai/mistral-7b-instruct:free',         // Mistral 7B
-  'openrouter/free',
+  'openrouter/free',                            // авто-роутер — стабільний
+  'meta-llama/llama-3.1-8b-instruct:free',      // Llama 3.1 8B
+  'mistralai/mistral-7b-instruct:free',         // Mistral 7B (якщо працює)
 ];
 
 let lastUsedModel = MODELS[0];
