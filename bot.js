@@ -346,12 +346,20 @@ function extractJSON(text) {
 
   // СПРОБА 2: Якщо JSON обрізаний (немає '}'), пробуємо закрити вручну
   if (depth > 0) {
-    // Рахуємо скільки дужок треба закрити
     let closing = '';
     for (let j = 0; j < depth; j++) closing += '}';
     try {
       const fixed = text.slice(start) + closing;
       return JSON.parse(fixed);
+    } catch(e) {}
+  }
+
+  // СПРОБА 3: Знайти першу { і останню }, спробувати витягнути JSON між ними
+  // Допомагає коли всередині є зайвий текст (наприклад "3 condom descriptions")
+  const endBrace = text.lastIndexOf('}');
+  if (start !== -1 && endBrace > start) {
+    try {
+      return JSON.parse(text.slice(start, endBrace + 1));
     } catch(e) {}
   }
 
