@@ -233,29 +233,99 @@ Close-up сцена — крупний план:
 
 // Швидкі моделі — для чату та оркестратора
 const MODELS = [
-  'openrouter/free',                            // авто-роутер — стабільний
-  'meta-llama/llama-3.1-8b-instruct:free',      // Llama 3.1 8B
-  'mistralai/mistral-7b-instruct:free',         // Mistral 7B (якщо працює)
+  'gemini-2.5-flash',                         // Gemini 2.5 Flash — основна
+  'openrouter/free',                          // авто-роутер — fallback
 ];
 
 // Розумні моделі — для субагентів (/shorts, /story, /stickman)
 const MODELS_SMART = [
-  'openrouter/free',                            // авто-роутер — стабільний
-  'meta-llama/llama-3.1-8b-instruct:free',      // Llama 3.1 8B
-  'mistralai/mistral-7b-instruct:free',         // Mistral 7B (якщо працює)
+  'gemini-2.5-flash',                         // Gemini 2.5 Flash — основна
+  'openrouter/free',                          // авто-роутер — fallback
 ];
 
 let lastUsedModel = MODELS[0];
 
+// ─── Gemini API ────────────────────────────────────────────────────────────
+
+async function callGemini(messages, maxTokens = 2000) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    console.warn('⚠️ GEMINI_API_KEY не знайдено');
+    return null;
+  }
+
+  const startTime = Date.now();
+  console.log(`🔄 Запит до gemini-2.5-flash...`);
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000); // 15 сек таймаут
+
+    // Конвертуємо повідомлення у формат Gemini
+    const geminiMessages = messages.map(m => ({
+      role: m.role === 'user' ? 'user' : 'model',
+      parts: [{ text: m.content }],
+    }));
+
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          contents: geminiMessages,
+          generationConfig: {
+            maxOutputTokens: maxTokens,
+            temperature: 0.7,
+          },
+        }),
+        signal: controller.signal,
+      }
+    );
+    clearTimeout(timeout);
+
+    const data = await res.json();
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+
+    if (data.error) {
+      console.warn(`⚠️ gemini-2.5-flash — помилка за ${elapsed}с: ${data.error.message?.substring(0, 80)}`);
+      return null;
+    }
+
+    const content = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+    if (content) {
+      console.log(`✅ Модель: gemini-2.5-flash за ${elapsed}с`);
+      lastUsedModel = 'gemini-2.5-flash';
+      return content;
+    }
+
+    console.warn(`⚠️ gemini-2.5-flash — порожня відповідь за ${elapsed}с`);
+    return null;
+  } catch (e) {
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+    console.warn(`⚠️ gemini-2.5-flash помилка за ${elapsed}с: ${e.message}`);
+    return null;
+  }
+}
+
 async function callLLMWithList(models, messages, maxTokens = 2000) {
   for (const model of models) {
+    // Gemini викликається окремою функцією
+    if (model === 'gemini-2.5-flash') {
+      const result = await callGemini(messages, maxTokens);
+      if (result) return result;
+      continue;
+    }
+
     const startTime = Date.now();
     console.log(`🔄 Запит до ${model}...`);
-    
+
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 10000); // 10 сек таймаут
-      
+
       const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -270,7 +340,7 @@ async function callLLMWithList(models, messages, maxTokens = 2000) {
       clearTimeout(timeout);
       const data = await res.json();
       const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-      
+
       if (data.error) {
         console.warn(`⚠️ ${model} — помилка за ${elapsed}с: ${data.error.code} ${data.error.message?.substring(0, 80)}`);
         continue;
