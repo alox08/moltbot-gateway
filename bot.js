@@ -303,6 +303,8 @@ function extractJSON(text) {
   if (mdMatch) {
     try {
       const p = JSON.parse(mdMatch[1].trim());
+      // Якщо всередині є scenes — повертаємо його
+      if (p.scenes) return p;
       return Array.isArray(p) ? { scenes: p } : p;
     } catch(e) {}
   }
@@ -333,7 +335,18 @@ function extractJSON(text) {
     else if (text[i] === '}') {
       depth--;
       if (depth === 0) {
-        try { return JSON.parse(text.slice(start, i + 1)); } catch(e) { return null; }
+        try {
+          const parsed = JSON.parse(text.slice(start, i + 1));
+          // Якщо всередині першого об'єкта є scenes — це помилка LLM, витягуємо
+          if (parsed.scenes && Array.isArray(parsed.scenes)) {
+            // Перевіряємо чи це подвійна вкладеність
+            if (parsed.scenes.length > 0 && parsed.scenes[0]?.scenes) {
+              return { scenes: parsed.scenes[0].scenes };
+            }
+            return parsed;
+          }
+          return Array.isArray(parsed) ? { scenes: parsed } : parsed;
+        } catch(e) { return null; }
       }
     }
   }
