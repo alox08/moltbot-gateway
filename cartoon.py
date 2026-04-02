@@ -26,11 +26,11 @@ except ImportError:
 #
 #   1280 × 720 (16:9) — стандарт мультиків (South Park, Family Guy...)
 #   Персонажі ~35% висоти кадру — пропорційні будівлям на фоні
-#   VERSION: 2026-04-01-walk-simple-4frame
+#   VERSION: 2026-04-02-walk-slower-arm-swing
 #
 W, H       = 1280, 720
 FPS        = 25
-S          = 0.55          # масштаб персонажів (зменшено з 0.72)
+S          = 0.72          # масштаб персонажів (збільшено для medium shot)
 WALK_SPEED = 220           # px/s (ширший кадр — швидше)
 
 # ─── Кольори ──────────────────────────────────────────────────────────────────
@@ -68,11 +68,9 @@ HIP_Y    = NECK_Y  + int(165 * S)    # = 482
 ARM_LEN  = int(90  * S)   # = 43
 SHIRT_W  = int(62  * S)   # = 29
 SLEEVE_W = max(8,  int(17 * S))   # = 8
-LEG_W    = max(5,  int(14 * S))   # = 7 (тонші ноги)
+HIP_W    = int(70 * S)    # = 34 (ширина розташування стегон)
+LEG_W    = max(10, int(24 * S))   # = 17 (товщина ліній ніг)
 LW       = max(4,  int(9  * S))   # = 4
-ANKLE    = max(3,  int(10 * S))   # = 5 (щиколотка)
-FOOT_L   = int(32 * S)            # = 17 (довжина ступні)
-FOOT_H   = int(12 * S)            # = 6  (висота ступні)
 
 # ─── Слоти позицій (1280px) ───────────────────────────────────────────────────
 
@@ -183,43 +181,50 @@ def _limb(draw, pts, color, w):
     for x, y in pts:
         draw.ellipse([x-r, y-r, x+r, y+r], fill=color)
 
-# ─── Ступня ───────────────────────────────────────────────────────────────────
+def draw_thick_leg(draw, hip_pt, knee_pt, foot_pt, color, width):
+    """Малює ногу як дві товстіші трубки замість _limb()."""
+    # Стегно від стегнової кістки до колена
+    draw.line([hip_pt, knee_pt], fill=color, width=width)
+    # Гомілка від коліна до стопи
+    draw.line([knee_pt, foot_pt], fill=color, width=width)
+    # Суглоби (скруглені)
+    r = width // 2
+    draw.ellipse([hip_pt[0]-r, hip_pt[1]-r, hip_pt[0]+r, hip_pt[1]+r], fill=color)
+    draw.ellipse([knee_pt[0]-r, knee_pt[1]-r, knee_pt[0]+r, knee_pt[1]+r], fill=color)
 
-def draw_foot(draw, ankle_x, ankle_y, color, facing_right=None, is_left=True):
-    """
-    Малює ступню з п'ятою та носком.
-    ankle_x, ankle_y — позиція щиколотки
-    facing_right: None=фронтально, True=праворуч, False=ліворуч
-    is_left: ліва чи права нога (для фронтального вигляду)
-    """
-    # Визначаємо напрямок ступні
-    if facing_right is True:
-        direction = 1  # вправо
-    elif facing_right is False:
-        direction = -1  # вліво
+def draw_foot(draw, knee_pt, foot_pt, color, shoe_len=34):
+    """Малює черевик як прямокутник на кінці ноги (горизонтально на землі)."""
+    kx, ky = knee_pt
+    fx, fy = foot_pt
+
+    # Вектор гомілки (від коліна до стопи)
+    dx, dy = fx - kx, fy - ky
+    L = math.hypot(dx, dy)
+    if L == 0:
+        return
+
+    # Нормалізований вектор гомілки
+    ux, uy = dx / L, dy / L
+    
+    # Черевик — прямокутник на землі (горизонтальний)
+    w = shoe_len // 2  # ширина черевика
+    h = shoe_len // 3  # висота черевика
+    
+    # Якщо нога вертикальна (fy ≈ GROUND_Y) — малюємо горизонтальний черевик
+    if abs(dy) > abs(dx):  # нога переважно вертикальна
+        # Прямокутник горизонтально на землі
+        x1, y1 = fx - w, fy - h
+        x2, y2 = fx + w, fy + h
+        draw.rounded_rectangle([x1, y1, x2, y2], radius=4, fill=color)
     else:
-        # Фронтально: ліва нога дивиться вліво, права вправо
-        direction = 1 if is_left else -1
-
-    # П'ята та носок
-    heel_x = ankle_x - direction * 6
-    toe_x = ankle_x + direction * FOOT_L
-
-    # Ступня як полігон (п'ята → носок → верх)
-    foot_pts = [
-        (heel_x, ankle_y - 2),                    # п'ята ззаду зверху
-        (toe_x, ankle_y + 2),                     # носок спереду зверху
-        (toe_x, ankle_y + FOOT_H),                # низ під пальцями
-        (heel_x + 4, ankle_y + FOOT_H + 2),       # низ п'яти (заокруглений)
-        (heel_x - 2, ankle_y + FOOT_H - 2),       # п'ята ззаду знизу
-    ]
-    draw.polygon(foot_pts, fill=color, outline=STICK_LINE, width=2)
-
-    # Кісточка (виступає збоку)
-    ankle_offset = direction * 3
-    draw.ellipse([ankle_x + ankle_offset - 3, ankle_y - 4,
-                  ankle_x + ankle_offset + 3, ankle_y + 4],
-                 fill=tuple(max(0, c - 30) for c in color))
+        # Нога під кутом — орієнтуємо по напрямку
+        px, py = -uy, ux  # перпендикуляр
+        pts = [
+            (fx + px * w, fy + py * w),
+            (fx - px * w, fy - py * w),
+            (fx + ux * shoe_len, fy + uy * shoe_len),
+        ]
+        draw.polygon(pts, fill=color)
 
 # ─── Фони ─────────────────────────────────────────────────────────────────────
 
@@ -372,16 +377,16 @@ def bg_city(draw, fi):
     draw_cloud(draw, 650-off, 55, 36)
     draw_cloud(draw, 1050-off, 70, 44)
 
-    # 4. Будівлі South Park стиль (7 штук, теплі кольори)
+    # 4. Будівлі South Park стиль (7 штук, теплі кольори) — збільшено на 15%
     # (bx, bw, bh, color, style)
     buildings = [
-        (   0, 192, 295, (192, 162, 128), 'peaked'),   # беж
-        ( 186, 170, 225, (168,  68,  62), 'peaked'),   # червоний
-        ( 350, 192, 328, ( 68,  98, 142), 'flat'),     # синій
-        ( 536, 215, 258, (128, 152,  96), 'peaked'),   # оливковий
-        ( 745, 180, 290, (152, 118,  80), 'flat'),     # коричневий
-        ( 918, 194, 265, (178,  98,  75), 'flat'),     # теракотовий
-        (1105, 175, 245, (208, 198, 175), 'peaked'),   # кремовий
+        (   0, 221, 339, (192, 162, 128), 'peaked'),   # беж (192→221, 295→339)
+        ( 186, 196, 259, (168,  68,  62), 'peaked'),   # червоний (170→196, 225→259)
+        ( 350, 221, 377, ( 68,  98, 142), 'flat'),     # синій (192→221, 328→377)
+        ( 536, 247, 297, (128, 152,  96), 'peaked'),   # оливковий (215→247, 258→297)
+        ( 745, 207, 334, (152, 118,  80), 'flat'),     # коричневий (180→207, 290→334)
+        ( 918, 223, 305, (178,  98,  75), 'flat'),     # теракотовий (194→223, 265→305)
+        (1105, 201, 282, (208, 198, 175), 'peaked'),   # кремовий (175→201, 245→282)
     ]
     for bx, bw, bh, col, style in buildings:
         draw_building_sp(draw, fi, bx, sw_top, bw, bh, col, style)
@@ -414,13 +419,13 @@ def bg_city(draw, fi):
         xs = x - off_d
         draw.rectangle([xs, lane_y-5, xs+dash, lane_y+5], fill=(255, 255, 100))
 
-    # 8. Машини (великі, South Park пропорції)
+    # 8. Машини (великі, South Park пропорції) — збільшено на 20%
     c1x = W + 200 - int(fi * 3.2) % (W + 400)
     c2x = int(fi * 2.5) % (W + 400) - 200
     c3x = W // 3 + 260 - int(fi * 1.8) % (W + 400)
-    draw_car(draw, c1x, GROUND_Y + 52,  (198, 52, 52),  facing_right=False, cw=158, ch=54)
-    draw_car(draw, c2x, GROUND_Y + 120, (52, 102, 202), facing_right=True,  cw=158, ch=54)
-    draw_car(draw, c3x, GROUND_Y + 52,  (52, 175, 75),  facing_right=False, cw=148, ch=50)
+    draw_car(draw, c1x, GROUND_Y + 52,  (198, 52, 52),  facing_right=False, cw=190, ch=65)
+    draw_car(draw, c2x, GROUND_Y + 120, (52, 102, 202), facing_right=True,  cw=190, ch=65)
+    draw_car(draw, c3x, GROUND_Y + 52,  (52, 175, 75),  facing_right=False, cw=178, ch=60)
 
 def bg_park(draw, fi):
     """Парк з деревами, лавкою, доріжкою."""
@@ -596,28 +601,31 @@ def draw_face(draw, fi, cx, facing_right, emotion, talking, facing_camera=False)
     is_profile = not facing_camera
     
     if facing_camera:
-        # Фронтально в камеру — два ока симетрично (Loading Artist стиль — великі очі)
+        # Фронтально в камеру — два ока симетрично
         fs    = 0
         ey    = HEAD_CY - int(10*S)
-        el_cx = cx - int(32*S)  # більше відстань між очима
-        er_cx = cx + int(32*S)
-        er_l  = int(32*S)       # більші очі (~50% обличчя)
-        pr_l  = int(18*S)       # більші зіниці
-        er_r  = int(32*S)
-        pr_r  = int(18*S)
+        el_cx = cx - int(28*S)
+        er_cx = cx + int(28*S)
+        er_l  = int(25*S)
+        pr_l  = int(14*S)
+        er_r  = int(25*S)
+        pr_r  = int(14*S)
     else:
         # Профіль — ТІЛЬКИ ОДНЕ ОКО (переднє)
         fs  = int(6*S) if facing_right else -int(6*S)
         ey  = HEAD_CY - int(10*S)
 
         # Для профілю: тільки одне око (переднє) — ЗСУНЕНО ВПЕРЕД на 3/4 від центру до краю
+        # Щоб око було виразніше видно в профіль
         if facing_right:
-            eye_cx = cx + int(52*S)
+            # Дивиться вправо — праве око (переднє) — зміщено на 3/4 до правого краю
+            eye_cx = cx + int(52*S)  # було 28*S + fs//2 ≈ 31*S
         else:
-            eye_cx = cx - int(52*S)
+            # Дивиться вліво — ліве око (переднє) — зміщено на 3/4 до лівого краю
+            eye_cx = cx - int(52*S)  # було -28*S + fs//2 ≈ -31*S
 
-        er   = int(28*S)  # радіус ока (збільшено)
-        pr   = int(16*S)  # зіниця (збільшено)
+        er   = int(24*S)  # радіус ока
+        pr   = int(13*S)  # зіниця
 
     # Surprised — злегка більші очі
     if emotion == 'surprised' and not facing_camera:
@@ -791,8 +799,8 @@ def draw_char(draw, fi, cx, char_id, walking=False, direction=0, talking=False, 
     # Гойдання тільки при ходьбі
     sway  = int(math.sin(fi*0.04)*2) if walking else 0
     cx    = cx + sway
-    # Розмах рук тільки при ходьбі
-    swing = math.sin(fi*0.12)*20 if walking else 0
+    # Розмах рук тільки при ходьбі (повільніше для природності)
+    swing = math.sin(fi*0.08)*16 if walking else 0
     
     # Визначаємо профіль чи ні
     is_profile = (direction == 1 or direction == 2)  # боком
@@ -801,6 +809,15 @@ def draw_char(draw, fi, cx, char_id, walking=False, direction=0, talking=False, 
     hip_w = SHIRT_W + int(14*S)
     arm_y = NECK_Y  + int(28*S)
 
+    # Руки в протифазі з ногами при ходьбі
+    # Якщо права нога попереду — ліва рука попереду (і навпаки)
+    arm_phase = 0
+    if walking:
+        # Використовуємо той самий cycle що й для ніг
+        arm_cycle = (fi // 3) % 12
+        # Руки в протифазі: коли ноги в contact (cycle 0-2), ліва рука вперед
+        arm_phase = math.sin(arm_cycle * math.pi / 6)  # плавний синус
+
     # Хвіст (перед головою — голова перекриє)
     if hair == 'ponytail':
         draw_ponytail(draw, cx, facing_right)
@@ -808,12 +825,15 @@ def draw_char(draw, fi, cx, char_id, walking=False, direction=0, talking=False, 
     # ── Руки ──
     # Для профілю: малюємо тільки одну руку (передню)
     front_sw = 1 if facing_right else -1  # сторона "вперед" відносно напрямку
-    
+
     if is_profile:
         # Профіль — одна рука (передня)
         sw = front_sw
         x_sh = cx + SHIRT_W * sw
-        
+
+        # Рука гойдається в протифазі з ногами
+        arm_swing = arm_phase * 25 if walking else 0
+
         if emotion == 'surprised':
             x_el = int(cx + SHIRT_W*sw*0.3)
             y_el = int(arm_y - ARM_LEN*0.25)
@@ -830,18 +850,21 @@ def draw_char(draw, fi, cx, char_id, walking=False, direction=0, talking=False, 
             x_h = int(cx + SHIRT_W*sw*0.6)
             y_h = int(arm_y - ARM_LEN*0.80)
         else:
-            # Звичайне положення
-            x_el = int(cx + SHIRT_W*sw*0.45)
-            y_el = int(arm_y + ARM_LEN*0.35 + swing*0.5*sw)
-            x_h = int(cx + SHIRT_W*sw)
-            y_h = int(arm_y + 58 + swing*sw)
-        
+            # Звичайне положення + гойдання від ходьби
+            x_el = int(cx + SHIRT_W*sw*0.45 + arm_swing*0.5)
+            y_el = int(arm_y + ARM_LEN*0.35)
+            x_h = int(cx + SHIRT_W*sw + arm_swing)
+            y_h = int(arm_y + 58)
+
         _limb(draw, [(x_sh,arm_y),(x_el,y_el),(x_h,y_h)], STICK_LINE, SLEEVE_W)
     else:
         # Фронтально — дві руки
         for side in (-1, 1):
             sw   = side if facing_right else -side
             x_sh = cx + SHIRT_W * sw
+
+            # Руки гойдаються в протифазі: ліва рука + права нога вперед
+            arm_swing_front = arm_phase * 20 * side if walking else 0
 
             if emotion == 'surprised':
                 x_el = int(cx + SHIRT_W*sw + ARM_LEN*sw*0.2)
@@ -859,10 +882,10 @@ def draw_char(draw, fi, cx, char_id, walking=False, direction=0, talking=False, 
                 y_el = int(arm_y - ARM_LEN*0.15)
                 y_h  = int(arm_y - ARM_LEN*0.80)
             else:
-                x_el = int(cx + SHIRT_W*sw + ARM_LEN*sw*0.45) + 4*sw
-                x_h  = int(cx + SHIRT_W*sw + ARM_LEN*sw)
-                y_el = int(arm_y + ARM_LEN*0.35 + swing*0.5*sw)
-                y_h  = int(arm_y + 58 + swing*sw)
+                x_el = int(cx + SHIRT_W*sw + ARM_LEN*sw*0.45) + 4*sw + arm_swing_front*0.5
+                x_h  = int(cx + SHIRT_W*sw + ARM_LEN*sw) + arm_swing_front
+                y_el = int(arm_y + ARM_LEN*0.35)
+                y_h  = int(arm_y + 58)
 
             _limb(draw, [(x_sh,arm_y),(x_el,y_el),(x_h,y_h)], STICK_LINE, SLEEVE_W)
 
@@ -902,64 +925,68 @@ def draw_char(draw, fi, cx, char_id, walking=False, direction=0, talking=False, 
 
     # ── Ноги ──
     if walking:
-        # ПРОСТИЙ 4-кадровий WALK CYCLE — як у South Park
-        # Кадр 0: Крок вперед (ліва нога попереду)
-        # Кадр 1: Проміжний (ноги навпаки)
-        # Кадр 2: Крок вперед (права нога попереду)
-        # Кадр 3: Проміжний (ноги навпаки)
+        # 8-кадровий WALK CYCLE (side view) — 4 основні позиції × 3 кадри (повільніше)
+        # Кадр 1-3: Contact — ноги найтепліше, передня нога пряма
+        # Кадр 4-6: Down — коліно зігнуте, задня нога піднімається
+        # Кадр 7-9: Passing — нога проходить повз (коліно високо)
+        # Кадр 10-12: Up — передня нога попереду, задня на носку
 
-        cycle = (fi // 4) % 4  # 0..3 (повільніше)
-        stride = int(50*S)     # крок
-        lift   = int(85*S)     # підйом коліна
+        cycle = (fi // 3) % 12  # 0..11 (повільніше: кожен кадр триває 3 фрейми)
+        stride = int(35*S)
+        lift   = int(55*S)  # висота підйому коліна (збільшено з 38*S)
 
         if is_profile:
-            # Ходьба боком (профіль) — ПРОСТИЙ цикл
+            # Ходьба боком (профіль) — 12 кадрів (плавніше)
 
             # Довжина сегментів ноги
-            thigh_len = int(72*S)  # стегно
-            shin_len  = int(72*S)  # гомілка
+            thigh_len = int(85*S)  # стегно (збільшено з 65 на 85 для вищих колін)
+            shin_len  = int(85*S)  # гомілка (збільшено з 65 на 85)
 
-            # Базова позиція стегон
-            lhip_x = cx - int(LEG_W * 0.4)
-            rhip_x = cx + int(LEG_W * 0.4)
+            # Базова позиція стегон (трохи розведені)
+            lhip_x = cx - int(HIP_W * 0.5)
+            rhip_x = cx + int(HIP_W * 0.5)
             hip_y  = HIP_Y + 6
 
-            if cycle == 0:
-                # Ліва нога ПОПЕРЕДУ — високо підняте коліно
-                lknee = (lhip_x + int(stride*0.3), hip_y + thigh_len - lift)
-                lfoot = (lhip_x + int(stride*0.8), GROUND_Y - int(lift*0.3))
+            if cycle <= 2:
+                # CONTACT (0-2) — права нога попереду
+                # Ліва нога (задня) — зігнута, стопа на землі
+                lknee = (lhip_x, hip_y + thigh_len)
+                lfoot = (lhip_x - int(stride*0.3), GROUND_Y)
 
-                # Права нога ПОЗАДУ — пряма
-                rknee = (rhip_x - int(stride*0.2), hip_y + thigh_len - int(lift*0.2))
-                rfoot = (rhip_x - int(stride*0.6), GROUND_Y)
+                # Права нога (передня) — пряма, п'ята торкається
+                rknee = (rhip_x + int(stride*0.2), hip_y + thigh_len - int(lift*0.3))
+                rfoot = (rhip_x + stride, GROUND_Y)
 
-            elif cycle == 1:
-                # Проміжний — ліва опускається, права проходить
-                lknee = (lhip_x + int(stride*0.1), hip_y + thigh_len - int(lift*0.4))
-                lfoot = (lhip_x + int(stride*0.4), GROUND_Y)
+            elif cycle <= 5:
+                # DOWN (3-5) — вага на передній нозі, коліно зігнуте
+                # Ліва нога (задня) — піднімається на носку
+                lknee = (lhip_x - int(stride*0.15), hip_y + thigh_len - int(lift*0.2))
+                lfoot = (lhip_x - int(stride*0.4), GROUND_Y - int(lift*0.5))
 
-                # Права нога проходить повз — високо
-                rknee = (rhip_x + int(stride*0.35), hip_y + thigh_len - lift)
-                rfoot = (rhip_x + int(stride*0.1), GROUND_Y - int(lift*0.4))
+                # Права нога (передня) — коліно зігнуте (амортизація)
+                rknee = (rhip_x + int(stride*0.3), hip_y + thigh_len - int(lift*0.5))
+                rfoot = (rhip_x + stride, GROUND_Y)
 
-            elif cycle == 2:
-                # Права нога ПОПЕРЕДУ — високо підняте коліно
-                rknee = (rhip_x + int(stride*0.3), hip_y + thigh_len - lift)
-                rfoot = (rhip_x + int(stride*0.8), GROUND_Y - int(lift*0.3))
+            elif cycle <= 8:
+                # PASSING (6-8) — ліва нога проходить повз праву
+                # Ліва нога — високо піднята, коліно вперед
+                lknee = (lhip_x + int(stride*0.4), hip_y + thigh_len - lift)
+                lfoot = (lhip_x + int(stride*0.2), GROUND_Y - int(lift*0.8))
 
-                # Ліва нога ПОЗАДУ — пряма
-                lknee = (lhip_x - int(stride*0.2), hip_y + thigh_len - int(lift*0.2))
-                lfoot = (lhip_x - int(stride*0.6), GROUND_Y)
+                # Права нога — пряма, вага на ній
+                rknee = (rhip_x + int(stride*0.1), hip_y + thigh_len - int(lift*0.2))
+                rfoot = (rhip_x + int(stride*0.5), GROUND_Y)
 
-            elif cycle == 3:
-                # Проміжний — права опускається, ліва проходить
-                rknee = (rhip_x + int(stride*0.1), hip_y + thigh_len - int(lift*0.4))
-                rfoot = (rhip_x + int(stride*0.4), GROUND_Y)
+            else:
+                # UP (9-11) — ліва нога попереду, права на носку
+                # Ліва нога — попереду, пряма
+                lknee = (lhip_x + int(stride*0.3), hip_y + thigh_len - int(lift*0.3))
+                lfoot = (lhip_x + stride, GROUND_Y)
 
-                # Ліва нога проходить повз — високо
-                lknee = (lhip_x + int(stride*0.35), hip_y + thigh_len - lift)
-                lfoot = (lhip_x + int(stride*0.1), GROUND_Y - int(lift*0.4))
-
+                # Права нога (задня) — на носку, зігнута
+                rknee = (rhip_x - int(stride*0.1), hip_y + thigh_len - int(lift*0.2))
+                rfoot = (rhip_x - int(stride*0.3), GROUND_Y - int(lift*0.4))
+            
             # Якщо дивиться вліво — дзеркально відображаємо
             if not facing_right:
                 lknee = (cx - (lknee[0] - cx), lknee[1])
@@ -985,13 +1012,13 @@ def draw_char(draw, fi, cx, char_id, walking=False, direction=0, talking=False, 
             # Профіль стоячи — ТІЛЬКИ ОДНА нога (передня)
             # Права нога попереду якщо дивиться вправо
             if facing_right:
-                rknee  = (cx + int(LEG_W), HIP_Y+int(85*S))
-                rfoot  = (cx + int(LEG_W), GROUND_Y)
+                rknee  = (cx + int(HIP_W), HIP_Y+int(85*S))
+                rfoot  = (cx + int(HIP_W), GROUND_Y)
                 lknee = None  # задня нога не малюється
                 lfoot = None
             else:
-                lknee  = (cx - int(LEG_W), HIP_Y+int(85*S))
-                lfoot  = (cx - int(LEG_W), GROUND_Y)
+                lknee  = (cx - int(HIP_W), HIP_Y+int(85*S))
+                lfoot  = (cx - int(HIP_W), GROUND_Y)
                 rknee = None  # задня нога не малюється
                 rfoot = None
         else:
@@ -1001,8 +1028,10 @@ def draw_char(draw, fi, cx, char_id, walking=False, direction=0, talking=False, 
             rknee = (cx+int(48*S), HIP_Y+int(85*S))
             rfoot = (cx+int(48*S), GROUND_Y)
 
-    # ── Малювання ніг — спочатку задня, потім передня ─────────────────────────────
-
+    # ── Малювання ніг — спочатку задня, потім передня ──
+    shoe  = int(50*S)    # = 36 (збільшено розмір черевика)
+    r_sh  = max(3, int(4*S))
+    
     if is_profile and walking:
         # Для профілю визначаємо яка нога позаду
         # Нога що має менший X (якщо дивиться вправо) або більший X (якщо вліво) — позаду
@@ -1010,7 +1039,7 @@ def draw_char(draw, fi, cx, char_id, walking=False, direction=0, talking=False, 
             back_leg = 'left' if lfoot[0] < rfoot[0] else 'right'
         else:
             back_leg = 'right' if rfoot[0] > lfoot[0] else 'left'
-
+        
         # Задня нога — трохи темніша (в тіні)
         back_col = (35, 35, 35)  # темніший за STICK_LINE
         front_col = STICK_LINE
@@ -1018,54 +1047,46 @@ def draw_char(draw, fi, cx, char_id, walking=False, direction=0, talking=False, 
         # Малюємо спочатку задню ногу
         if back_leg == 'left':
             # Ліва нога позаду — малюємо першою
-            lhip_pt = (cx - int(LEG_W * 0.5), HIP_Y + 6)
-            _limb(draw, [lhip_pt, lknee], back_col, LEG_W)
-            _limb(draw, [lknee, lfoot], back_col, LEG_W)
-            draw_foot(draw, lfoot[0], lfoot[1], back_col, facing_right=facing_right, is_left=True)
+            lhip_pt = (cx, HIP_Y + 6)
+            draw_thick_leg(draw, lhip_pt, lknee, lfoot, back_col, LEG_W)
+            draw_foot(draw, lknee, lfoot, back_col, shoe)
         else:
             # Права нога позаду — малюємо першою
-            rhip_pt = (cx + int(LEG_W * 0.5), HIP_Y + 6)
-            _limb(draw, [rhip_pt, rknee], back_col, LEG_W)
-            _limb(draw, [rknee, rfoot], back_col, LEG_W)
-            draw_foot(draw, rfoot[0], rfoot[1], back_col, facing_right=facing_right, is_left=False)
+            rhip_pt = (cx, HIP_Y + 6)
+            draw_thick_leg(draw, rhip_pt, rknee, rfoot, back_col, LEG_W)
+            draw_foot(draw, rknee, rfoot, back_col, shoe)
 
         # Потім передню ногу (вже намальовано куртку вище)
         if back_leg == 'left':
             # Права нога попереду — малюємо другою
-            rhip_pt = (cx + int(LEG_W * 0.5), HIP_Y + 6)
-            _limb(draw, [rhip_pt, rknee], front_col, LEG_W)
-            _limb(draw, [rknee, rfoot], front_col, LEG_W)
-            draw_foot(draw, rfoot[0], rfoot[1], front_col, facing_right=facing_right, is_left=False)
+            rhip_pt = (cx, HIP_Y + 6)
+            draw_thick_leg(draw, rhip_pt, rknee, rfoot, front_col, LEG_W)
+            draw_foot(draw, rknee, rfoot, front_col, shoe)
         else:
             # Ліва нога попереду — малюємо другою
-            lhip_pt = (cx - int(LEG_W * 0.5), HIP_Y + 6)
-            _limb(draw, [lhip_pt, lknee], front_col, LEG_W)
-            _limb(draw, [lknee, lfoot], front_col, LEG_W)
-            draw_foot(draw, lfoot[0], lfoot[1], front_col, facing_right=facing_right, is_left=True)
+            lhip_pt = (cx, HIP_Y + 6)
+            draw_thick_leg(draw, lhip_pt, lknee, lfoot, front_col, LEG_W)
+            draw_foot(draw, lknee, lfoot, front_col, shoe)
     else:
         # Фронтально або стоячи — малюємо обидві ноги
         if is_profile:
             # Профіль стоячи — тільки одна нога (передня)
             if facing_right:
-                rhip_pt = (cx + int(LEG_W * 0.5), HIP_Y + 6)
-                _limb(draw, [rhip_pt, rknee], STICK_LINE, LEG_W)
-                _limb(draw, [rknee, rfoot], STICK_LINE, LEG_W)
-                draw_foot(draw, rfoot[0], rfoot[1], STICK_LINE, facing_right=facing_right, is_left=False)
+                rhip_pt = (cx, HIP_Y + 6)
+                draw_thick_leg(draw, rhip_pt, rknee, rfoot, STICK_LINE, LEG_W)
+                draw_foot(draw, rknee, rfoot, STICK_LINE, shoe)
             else:
-                lhip_pt = (cx - int(LEG_W * 0.5), HIP_Y + 6)
-                _limb(draw, [lhip_pt, lknee], STICK_LINE, LEG_W)
-                _limb(draw, [lknee, lfoot], STICK_LINE, LEG_W)
-                draw_foot(draw, lfoot[0], lfoot[1], STICK_LINE, facing_right=facing_right, is_left=True)
+                lhip_pt = (cx, HIP_Y + 6)
+                draw_thick_leg(draw, lhip_pt, lknee, lfoot, STICK_LINE, LEG_W)
+                draw_foot(draw, lknee, lfoot, STICK_LINE, shoe)
         else:
             # Фронтально — ноги на ширині плечей
             lhip = (cx-hip_w//2, HIP_Y+6)
             rhip = (cx+hip_w//2, HIP_Y+6)
-            _limb(draw, [lhip,lknee], STICK_LINE, LEG_W)
-            _limb(draw, [lknee,lfoot], STICK_LINE, LEG_W)
-            _limb(draw, [rhip,rknee], STICK_LINE, LEG_W)
-            _limb(draw, [rknee,rfoot], STICK_LINE, LEG_W)
-            draw_foot(draw, lfoot[0], lfoot[1], STICK_LINE, facing_right=None, is_left=True)
-            draw_foot(draw, rfoot[0], rfoot[1], STICK_LINE, facing_right=None, is_left=False)
+            draw_thick_leg(draw, lhip, lknee, lfoot, STICK_LINE, LEG_W)
+            draw_thick_leg(draw, rhip, rknee, rfoot, STICK_LINE, LEG_W)
+            draw_foot(draw, lknee, lfoot, STICK_LINE, shoe)
+            draw_foot(draw, rknee, rfoot, STICK_LINE, shoe)
 
     # ── Голова — профіль або фронтально ──
     if is_profile:
@@ -1284,11 +1305,10 @@ def render_scene(scene_def, scene_idx, initial_chars, work_dir):
                     # При ходьбі — профіль (боком)
                     direction = 1 if facing_right else 2
                 else:
-                    # Стоїть — фронтально до камери (як раніше)
-                    direction = 0
-                    # Коли стоїть фронтально — обличчя в камеру з двома очима
-                    facing_camera = True
-
+                    # Стоїть — зберігаємо профіль якщо дивиться вліво/вправо
+                    # direction = 1 (праворуч) або 2 (ліворуч) для профілю
+                    direction = 1 if facing_right else 2
+                
                 draw_char(draw, fi, int(cx_f), char_id,
                           walking=walking, direction=direction,
                           talking=is_talking, emotion=emo,
