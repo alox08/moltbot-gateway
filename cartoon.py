@@ -26,7 +26,7 @@ except ImportError:
 #
 #   1280 × 720 (16:9) — стандарт мультиків (South Park, Family Guy...)
 #   Персонажі ~35% висоти кадру — пропорційні будівлям на фоні
-#   VERSION: 2026-04-03-knee-forward-shoe-direction
+#   VERSION: 2026-04-03-high-knee-walk
 #
 W, H       = 1280, 720
 FPS        = 25
@@ -924,19 +924,15 @@ def draw_char(draw, fi, cx, char_id, walking=False, direction=0, talking=False, 
         # 8-кадровий WALK CYCLE (side view) — 4 основні позиції × 3 кадри (повільніше)
         # Кадр 1-3: Contact — ноги найтепліше, передня нога пряма
         # Кадр 4-6: Down — коліно зігнуте, задня нога піднімається
-        # Кадр 7-9: Passing — нога проходить повз (коліно високо)
+        # Кадр 7-9: Passing — нога проходить повз (коліно ВИСОКО)
         # Кадр 10-12: Up — передня нога попереду, задня на носку
 
         cycle = (fi // 3) % 12  # 0..11 (повільніше: кожен кадр триває 3 фрейми)
         stride = int(35*S)
-        lift   = int(55*S)  # висота підйому коліна (збільшено з 38*S)
+        lift   = int(85*S)  # висота підйому коліна (ВИЩЕ — щоб не ковзали по льоду)
 
         if is_profile:
             # Ходьба боком (профіль) — 12 кадрів (плавніше)
-
-            # Довжина сегментів ноги
-            thigh_len = int(85*S)  # стегно (збільшено з 65 на 85 для вищих колін)
-            shin_len  = int(85*S)  # гомілка (збільшено з 65 на 85)
 
             # КЛЮЧОВА ЗМІНА: при ходьбі боком стегна ОДНЕ ЗА ОДНИМ (з центру)
             # Не з боків тулуба як у жука!
@@ -944,46 +940,49 @@ def draw_char(draw, fi, cx, char_id, walking=False, direction=0, talking=False, 
             rhip_x = cx
             hip_y  = HIP_Y + 6
 
-            if cycle <= 2:
-                # CONTACT (0-2) — права нога попереду
-                # Ліва нога (задня) — пряма, стопа на землі
-                lknee = (lhip_x - int(stride*0.15), hip_y + int(thigh_len*0.70))
-                lfoot = (lhip_x - int(stride*0.3), GROUND_Y)
+            # Довжина сегментів ноги
+            thigh_len = int(85*S)  # стегно
+            shin_len  = int(85*S)  # гомілка
 
-                # Права нога (передня) — коліно ВИСОКО і вперед
-                # knee_y = hip_y + 0.45*thigh_len (вище середини стегна)
-                rknee = (rhip_x + int(stride*0.70), hip_y + int(thigh_len*0.45))
+            if cycle <= 2:
+                # CONTACT (0-2) — права нога попереду, ліва торкається землі
+                # Ліва нога (задня) — пряма, стопа НА ЗЕМЛІ
+                lknee = (lhip_x - int(stride*0.3), hip_y + thigh_len)
+                lfoot = (lhip_x - int(stride*0.6), GROUND_Y)
+
+                # Права нога (передня) — коліно ВИСОКО, стопа на землі
+                rknee = (rhip_x + int(stride*0.5), hip_y + int(thigh_len*0.55))
                 rfoot = (rhip_x + stride, GROUND_Y)
 
             elif cycle <= 5:
-                # DOWN (3-5) — вага на передній нозі, коліно сильно зігнуте
-                # Ліва нога (задня) — піднімається, коліно назад і вище
-                lknee = (lhip_x - int(stride*0.35), hip_y + int(thigh_len*0.55))
-                lfoot = (lhip_x - int(stride*0.4), GROUND_Y - int(lift*0.5))
+                # DOWN (3-5) — вага на передній нозі, задня нога ПІДНІМАЄТЬСЯ
+                # Ліва нога (задня) — коліно ВИСОКО, стопа ВІДРИВАЄТЬСЯ
+                lknee = (lhip_x - int(stride*0.2), hip_y + int(thigh_len*0.65))
+                lfoot = (lhip_x - int(stride*0.15), GROUND_Y - int(lift*0.7))
 
-                # Права нога — коліно МАКСИМАЛЬНО високо і вперед
-                rknee = (rhip_x + int(stride*0.75), hip_y + int(thigh_len*0.35))
+                # Права нога — коліно ВИСОКО і вперед
+                rknee = (rhip_x + int(stride*0.6), hip_y + int(thigh_len*0.50))
                 rfoot = (rhip_x + stride, GROUND_Y)
 
             elif cycle <= 8:
-                # PASSING (6-8) — ліва нога проходить повз праву
-                # Ліва нога — ВИСОКО, коліно МАКСИМАЛЬНО вперед
-                lknee = (lhip_x + int(stride*0.70), hip_y + int(thigh_len*0.30))
-                lfoot = (lhip_x + int(stride*0.2), GROUND_Y - int(lift*0.8))
+                # PASSING (6-8) — ліва нога проходить ПОВЗ, коліно МАКСИМАЛЬНО ВИСОКО
+                # Ліва нога — КОЛІНО ВИЩЕ СТЕГНА, стопа далеко від землі
+                lknee = (lhip_x + int(stride*0.5), hip_y + int(thigh_len*0.30))
+                lfoot = (lhip_x + int(stride*0.15), GROUND_Y - lift)
 
-                # Права нога — пряма, коліно трохи вперед
-                rknee = (rhip_x + int(stride*0.55), hip_y + int(thigh_len*0.55))
-                rfoot = (rhip_x + int(stride*0.5), GROUND_Y)
+                # Права нога — пряма, штовхає
+                rknee = (rhip_x + int(stride*0.4), hip_y + int(thigh_len*0.60))
+                rfoot = (rhip_x + int(stride*0.3), GROUND_Y - int(lift*0.3))
 
             else:
                 # UP (9-11) — ліва нога попереду, права на носку
-                # Ліва нога — попереду, коліно ВИСОКО і вперед
-                lknee = (lhip_x + int(stride*0.70), hip_y + int(thigh_len*0.45))
+                # Ліва нога — попереду, коліно трохи зігнуте
+                lknee = (lhip_x + int(stride*0.6), hip_y + int(thigh_len*0.50))
                 lfoot = (lhip_x + stride, GROUND_Y)
 
                 # Права нога (задня) — на носку, коліно назад
-                rknee = (rhip_x - int(stride*0.35), hip_y + int(thigh_len*0.55))
-                rfoot = (rhip_x - int(stride*0.3), GROUND_Y - int(lift*0.4))
+                rknee = (rhip_x - int(stride*0.2), hip_y + int(thigh_len*0.65))
+                rfoot = (rhip_x - int(stride*0.15), GROUND_Y - int(lift*0.5))
             
             # Якщо дивиться вліво — дзеркально відображаємо
             if not facing_right:
