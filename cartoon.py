@@ -26,7 +26,7 @@ except ImportError:
 #
 #   1280 × 720 (16:9) — стандарт мультиків (South Park, Family Guy...)
 #   Персонажі ~35% висоти кадру — пропорційні будівлям на фоні
-#   VERSION: 2026-04-03-one-foot-ground
+#   VERSION: 2026-04-03-no-slide-walk
 #
 W, H       = 1280, 720
 FPS        = 25
@@ -919,66 +919,73 @@ def draw_char(draw, fi, cx, char_id, walking=False, direction=0, talking=False, 
             (tx_t+6,v_d+int(36*S)),(tx_t,v_d+int(52*S)),(tx_t-6,v_d+int(36*S))
         ], fill=tcol, outline=STICK_LINE, width=2)
 
-    # ── Ноги ──
+    # ── Ноги — фізично правильна ходьба БЕЗ ковзання стоп ──
     if walking:
-        # WALK CYCLE — ОДНА нога ЗАВЖДИ на землі (не стрибки!)
-        # 12 кадрів, повільний природний крок
+        #
+        # КЛЮЧОВА ФОРМУЛА БЕЗ КОВЗАННЯ:
+        #   Коли стопа на землі: ABSOLUTE позиція фіксована.
+        #   Відносна позиція стопи = stance_world_x - cx(t)
+        #   Зміна відносної = -зміна_тіла → стопа НЕ ковзає візуально!
+        #
+        #   stride = відстань тіла за повну опорну фазу нози.
+        #   Опорна фаза = від +stride/2 до -stride/2 (relative).
+        #   Зміна relative = stride. Зміна тіла = stride. → Немає ковзання!
+        #
+        # Параметри:
+        #   4 фази × 6 фреймів = 24 фрейми/цикл
+        #   Тіло за 6 фреймів: 6 × 220/25 ≈ 53px
+        #   Тіло за 12 фреймів (опорна фаза): ≈ 106px
+        #   stride = 106 → від +53 до -53 relative
+        #
+        # Swing нога: за 12 фреймів летить від -stride/2 до +stride/2 relative
+        #   Absolute change = stride + body_change = 106 + 106 = 212 за 12 фреймів
+        #   ≈ 17.7 px/frame — швидко але ОК (нога в повітрі, ковзання не видно)
 
-        cycle = (fi // 3) % 12  # 0..11
-        stride = int(40*S)       # довжина кроку
-        lift   = int(70*S)       # підйом коліна (високо але не стрибок)
+        cycle = (fi // 4) % 4  # 0..3, кожен кадр = 4 фрейми
+        # Тіло за 8 фреймів (2 фази = опора): 8 * 220/25 = 70.4px
+        # stride МАЄ = 70 щоб стопа НЕ ковзала (relative зміна = body зміна)
+        stride = 70              # абсолютні пікселі, НЕ множиться на S!
+        lift   = int(90 * S)   # підйом коліна
+        hs = stride // 2        # 35px
 
         if is_profile:
-            # Ходьба боком (профіль)
-            lhip_x = cx
-            rhip_x = cx
             hip_y  = HIP_Y + 6
-
             thigh_len = int(85*S)
-            shin_len  = int(85*S)
 
-            # ГЛАВНЕ ПРАВИЛО: коли одна нога в повітрі — ДРУГА НА ЗЕМЛІ
-            # Використовуємо простий підхід: ліва/права нога по черзі
+            # Фази: кожна нога 2 фази опора + 2 фази swing
+            # stance foot relative: +hs → 0 → -hs (зміна = stride)
+            # body change за 2 фази = 2 * 4 * 220/25 = 70.4 ≈ stride*2/S
+            # Це НЕ ідеально але мінімальне ковзання (~0.2px/фрейм)
 
-            if cycle <= 2:
-                # ФАЗА 1 (0-2): Ліва попереду на землі, права починає крок
-                # Ліва нога — ПРЯМА, стоїть НА ЗЕМЛІ (опорна)
-                lknee = (lhip_x - int(stride*0.5), hip_y + thigh_len)
-                lfoot = (lhip_x - stride, GROUND_Y)
+            if cycle == 0:
+                # Ліва ПОПЕРЕДУ, Права ПОЗАДУ
+                lknee = (cx + int(hs*0.5), hip_y + int(thigh_len*0.60))
+                lfoot = (cx + hs, GROUND_Y)
+                rknee = (cx - int(hs*0.4), hip_y + int(thigh_len*0.80))
+                rfoot = (cx - hs, GROUND_Y)
 
-                # Права нога — ТІЛЬКИ починає рух, коліно трохи підняте
-                rknee = (rhip_x + int(stride*0.15), hip_y + int(thigh_len*0.70))
-                rfoot = (rhip_x + int(stride*0.3), GROUND_Y)
+            elif cycle == 1:
+                # Ліва ОПОРНА (під тілом), Права SWING (високо!)
+                lknee = (cx, hip_y + int(thigh_len*0.85))
+                lfoot = (cx, GROUND_Y)
+                # Права летить вперед — коліно МАКСИМАЛЬНО високо
+                rknee = (cx + int(stride*0.5), hip_y + int(thigh_len*0.20))
+                rfoot = (cx + int(hs*0.4), GROUND_Y - lift)
 
-            elif cycle <= 5:
-                # ФАЗА 2 (3-5): Ліва попереду, права ПІДНІМАЄТЬСЯ
-                # Ліва нога — ПРЯМА, НА ЗЕМЛІ (опорна, ще трохи попереду)
-                lknee = (lhip_x - int(stride*0.3), hip_y + thigh_len)
-                lfoot = (lhip_x - int(stride*0.6), GROUND_Y)
+            elif cycle == 2:
+                # Права ПОПЕРЕДУ, Ліва ПОЗАДУ
+                lknee = (cx - int(hs*0.4), hip_y + int(thigh_len*0.80))
+                lfoot = (cx - hs, GROUND_Y)
+                rknee = (cx + int(hs*0.5), hip_y + int(thigh_len*0.60))
+                rfoot = (cx + hs, GROUND_Y)
 
-                # Права нога — коліно ВИСОКО, стопа ВІДРИВАЄТЬСЯ
-                rknee = (rhip_x + int(stride*0.5), hip_y + int(thigh_len*0.35))
-                rfoot = (rhip_x + int(stride*0.4), GROUND_Y - int(lift*0.6))
-
-            elif cycle <= 8:
-                # ФАЗА 3 (6-8): Права попереду на землі, ліва ПІДНІМАЄТЬСЯ
-                # Права нога — ПРЯМА, НА ЗЕМЛІ (тепер опорна)
-                rknee = (rhip_x + int(stride*0.3), hip_y + thigh_len)
-                rfoot = (rhip_x + int(stride*0.6), GROUND_Y)
-
-                # Ліва нога — коліно ВИСОКО, стопа ВІДРИВАЄТЬСЯ
-                lknee = (lhip_x + int(stride*0.5), hip_y + int(thigh_len*0.35))
-                lfoot = (lhip_x + int(stride*0.4), GROUND_Y - int(lift*0.6))
-
-            else:
-                # ФАЗА 4 (9-11): Права попереду, ліва ставить на землю
-                # Права нога — ПРЯМА, НА ЗЕМЛІ (опорна)
-                rknee = (rhip_x + int(stride*0.5), hip_y + thigh_len)
-                rfoot = (rhip_x + stride, GROUND_Y)
-
-                # Ліва нога — ЗАДНЯ, ставить стопу на землю
-                lknee = (lhip_x - int(stride*0.15), hip_y + int(thigh_len*0.70))
-                lfoot = (lhip_x - int(stride*0.3), GROUND_Y)
+            elif cycle == 3:
+                # Права ОПОРНА (під тілом), Ліва SWING (високо!)
+                rknee = (cx, hip_y + int(thigh_len*0.85))
+                rfoot = (cx, GROUND_Y)
+                # Ліва летить вперед — коліно МАКСИМАЛЬНО високо
+                lknee = (cx + int(stride*0.5), hip_y + int(thigh_len*0.20))
+                lfoot = (cx + int(hs*0.4), GROUND_Y - lift)
             
             # Якщо дивиться вліво — дзеркально відображаємо
             if not facing_right:
