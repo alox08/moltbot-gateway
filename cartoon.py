@@ -26,7 +26,7 @@ except ImportError:
 #
 #   1280 × 720 (16:9) — стандарт мультиків (South Park, Family Guy...)
 #   Персонажі ~35% висоти кадру — пропорційні будівлям на фоні
-#   VERSION: 2026-04-03-all-face-camera-simple-shoes
+#   VERSION: 2026-04-03-shoe-heel-fix-longer-arms-walk
 #
 W, H       = 1280, 720
 FPS        = 25
@@ -193,20 +193,22 @@ def draw_thick_leg(draw, hip_pt, knee_pt, foot_pt, color, width):
     draw.ellipse([knee_pt[0]-r, knee_pt[1]-r, knee_pt[0]+r, knee_pt[1]+r], fill=color)
 
 def draw_foot(draw, knee_pt, foot_pt, color, shoe_len=50):
-    """Малює черевик — простий прямокутник з заокругленням на землі."""
+    """Малює черевик — видовжений носок, компактна п'ята."""
     fx, fy = foot_pt
 
-    # Черевик завжди горизонтальний на землі
-    w = int(shoe_len * 0.40)   # ширина ~20px
-    h = int(shoe_len * 0.22)   # висота ~11px
+    h = int(shoe_len * 0.20)   # висота ~10px (компактний)
 
-    # Носок трохи виступає вперед
-    x1 = fx - w
+    # П'ята — компактна (коротка)
+    heel_back = int(shoe_len * 0.20)   # ~10px назад
+    # Носок — видовжений
+    toe_front = int(shoe_len * 0.55)   # ~27px вперед
+
+    x1 = fx - heel_back
     y1 = fy - h
-    x2 = fx + w + int(w * 0.3)  # носок довший
+    x2 = fx + toe_front
     y2 = fy
 
-    draw.rounded_rectangle([x1, y1, x2, y2], radius=4, fill=color, outline=STICK_LINE, width=2)
+    draw.rounded_rectangle([x1, y1, x2, y2], radius=3, fill=color, outline=STICK_LINE, width=2)
 
 # ─── Фони ─────────────────────────────────────────────────────────────────────
 
@@ -794,11 +796,13 @@ def draw_char(draw, fi, cx, char_id, walking=False, direction=0, talking=False, 
     # Руки в протифазі з ногами при ходьбі
     # Якщо права нога попереду — ліва рука попереду (і навпаки)
     arm_phase = 0
+    arm_len_mult = 1.0  # множник довжини рук (збільшується при ходьбі)
     if walking:
         # Використовуємо той самий cycle що й для ніг
         arm_cycle = (fi // 3) % 12
         # Руки в протифазі: коли ноги в contact (cycle 0-2), ліва рука вперед
         arm_phase = math.sin(arm_cycle * math.pi / 6)  # плавний синус
+        arm_len_mult = 1.35  # руки довші при ходьбі (+35%)
 
     # Хвіст (перед головою — голова перекриє)
     if hair == 'ponytail':
@@ -815,32 +819,34 @@ def draw_char(draw, fi, cx, char_id, walking=False, direction=0, talking=False, 
 
         # Рука гойдається в протифазі з ногами
         arm_swing = arm_phase * 25 if walking else 0
+        AL = ARM_LEN * arm_len_mult  # довжина руки з множником
 
         if emotion == 'surprised':
             x_el = int(cx + SHIRT_W*sw*0.3)
-            y_el = int(arm_y - ARM_LEN*0.25)
+            y_el = int(arm_y - AL*0.25)
             x_h = int(cx + SHIRT_W*sw*0.5)
-            y_h = int(arm_y - ARM_LEN*0.85)
+            y_h = int(arm_y - AL*0.85)
         elif emotion == 'angry':
             x_el = int(cx + SHIRT_W*sw*0.65)
-            y_el = int(arm_y + ARM_LEN*0.15)
+            y_el = int(arm_y + AL*0.15)
             x_h = int(cx + SHIRT_W*sw*1.1)
-            y_h = int(arm_y - ARM_LEN*0.15)
+            y_h = int(arm_y - AL*0.15)
         elif gesture == 'explain' and sw == front_sw:
             x_el = int(cx + SHIRT_W*sw*0.25)
-            y_el = int(arm_y - ARM_LEN*0.15)
+            y_el = int(arm_y - AL*0.15)
             x_h = int(cx + SHIRT_W*sw*0.6)
-            y_h = int(arm_y - ARM_LEN*0.80)
+            y_h = int(arm_y - AL*0.80)
         else:
             # Звичайне положення + гойдання від ходьби
             x_el = int(cx + SHIRT_W*sw*0.45 + arm_swing*0.5)
-            y_el = int(arm_y + ARM_LEN*0.35)
+            y_el = int(arm_y + AL*0.35)
             x_h = int(cx + SHIRT_W*sw + arm_swing)
             y_h = int(arm_y + 58)
 
         _limb(draw, [(x_sh,arm_y),(x_el,y_el),(x_h,y_h)], STICK_LINE, SLEEVE_W)
     else:
         # Фронтально — дві руки
+        AL = ARM_LEN * arm_len_mult  # довжина руки з множником
         for side in (-1, 1):
             sw   = side if facing_right else -side
             x_sh = cx + SHIRT_W * sw
@@ -849,24 +855,24 @@ def draw_char(draw, fi, cx, char_id, walking=False, direction=0, talking=False, 
             arm_swing_front = arm_phase * 20 * side if walking else 0
 
             if emotion == 'surprised':
-                x_el = int(cx + SHIRT_W*sw + ARM_LEN*sw*0.2)
+                x_el = int(cx + SHIRT_W*sw + AL*sw*0.2)
                 x_h  = int(cx + SHIRT_W*sw*0.3)
-                y_el = int(arm_y - ARM_LEN*0.25)
-                y_h  = int(arm_y - ARM_LEN*0.85)
+                y_el = int(arm_y - AL*0.25)
+                y_h  = int(arm_y - AL*0.85)
             elif emotion == 'angry':
-                x_el = int(cx + SHIRT_W*sw + ARM_LEN*sw*0.65)
-                x_h  = int(cx + SHIRT_W*sw + ARM_LEN*sw*1.1)
-                y_el = int(arm_y + ARM_LEN*0.15)
-                y_h  = int(arm_y - ARM_LEN*0.15)
+                x_el = int(cx + SHIRT_W*sw + AL*sw*0.65)
+                x_h  = int(cx + SHIRT_W*sw + AL*sw*1.1)
+                y_el = int(arm_y + AL*0.15)
+                y_h  = int(arm_y - AL*0.15)
             elif gesture == 'explain' and sw == front_sw:
-                x_el = int(cx + SHIRT_W*sw + ARM_LEN*sw*0.25)
+                x_el = int(cx + SHIRT_W*sw + AL*sw*0.25)
                 x_h  = int(cx + SHIRT_W*sw*0.6)
-                y_el = int(arm_y - ARM_LEN*0.15)
-                y_h  = int(arm_y - ARM_LEN*0.80)
+                y_el = int(arm_y - AL*0.15)
+                y_h  = int(arm_y - AL*0.80)
             else:
-                x_el = int(cx + SHIRT_W*sw + ARM_LEN*sw*0.45) + 4*sw + arm_swing_front*0.5
-                x_h  = int(cx + SHIRT_W*sw + ARM_LEN*sw) + arm_swing_front
-                y_el = int(arm_y + ARM_LEN*0.35)
+                x_el = int(cx + SHIRT_W*sw + AL*sw*0.45) + 4*sw + arm_swing_front*0.5
+                x_h  = int(cx + SHIRT_W*sw + AL*sw) + arm_swing_front
+                y_el = int(arm_y + AL*0.35)
                 y_h  = int(arm_y + 58)
 
             _limb(draw, [(x_sh,arm_y),(x_el,y_el),(x_h,y_h)], STICK_LINE, SLEEVE_W)
