@@ -938,50 +938,51 @@ def draw_char(draw, fi, cx, char_id, walking=False, direction=0, talking=False, 
             thigh_len = int(85*S)  # стегно (збільшено з 65 на 85 для вищих колін)
             shin_len  = int(85*S)  # гомілка (збільшено з 65 на 85)
 
-            # Базова позиція стегон (трохи розведені)
-            lhip_x = cx - int(HIP_W * 0.5)
-            rhip_x = cx + int(HIP_W * 0.5)
+            # КЛЮЧОВА ЗМІНА: при ходьбі боком стегна ОДНЕ ЗА ОДНИМ (з центру)
+            # Не з боків тулуба як у жука!
+            lhip_x = cx
+            rhip_x = cx
             hip_y  = HIP_Y + 6
 
             if cycle <= 2:
                 # CONTACT (0-2) — права нога попереду
                 # Ліва нога (задня) — пряма, стопа на землі
-                lknee = (lhip_x - int(stride*0.15), hip_y + thigh_len - int(lift*0.1))
+                lknee = (lhip_x - int(stride*0.15), hip_y + int(thigh_len*0.70))
                 lfoot = (lhip_x - int(stride*0.3), GROUND_Y)
 
-                # Права нога (передня) — коліно ВИРАЗНО вперед (за стопою!)
-                # Ключ: knee_x > foot_x щоб коліно йшло вперед
-                rknee = (rhip_x + int(stride*1.20), hip_y + thigh_len - int(lift*0.6))
+                # Права нога (передня) — коліно ВИСОКО і вперед
+                # knee_y = hip_y + 0.45*thigh_len (вище середини стегна)
+                rknee = (rhip_x + int(stride*0.70), hip_y + int(thigh_len*0.45))
                 rfoot = (rhip_x + stride, GROUND_Y)
 
             elif cycle <= 5:
                 # DOWN (3-5) — вага на передній нозі, коліно сильно зігнуте
-                # Ліва нога (задня) — піднімається, коліно назад
-                lknee = (lhip_x - int(stride*0.35), hip_y + thigh_len - int(lift*0.4))
+                # Ліва нога (задня) — піднімається, коліно назад і вище
+                lknee = (lhip_x - int(stride*0.35), hip_y + int(thigh_len*0.55))
                 lfoot = (lhip_x - int(stride*0.4), GROUND_Y - int(lift*0.5))
 
-                # Права нога — коліно МАКСИМАЛЬНО вперед (за стопою!)
-                rknee = (rhip_x + int(stride*1.30), hip_y + thigh_len - int(lift*0.75))
+                # Права нога — коліно МАКСИМАЛЬНО високо і вперед
+                rknee = (rhip_x + int(stride*0.75), hip_y + int(thigh_len*0.35))
                 rfoot = (rhip_x + stride, GROUND_Y)
 
             elif cycle <= 8:
                 # PASSING (6-8) — ліва нога проходить повз праву
-                # Ліва нога — ВИСОКО, коліно МАКСИМАЛЬНО вперед (за стопою!)
-                lknee = (lhip_x + int(stride*1.25), hip_y + thigh_len - lift)
+                # Ліва нога — ВИСОКО, коліно МАКСИМАЛЬНО вперед
+                lknee = (lhip_x + int(stride*0.70), hip_y + int(thigh_len*0.30))
                 lfoot = (lhip_x + int(stride*0.2), GROUND_Y - int(lift*0.8))
 
                 # Права нога — пряма, коліно трохи вперед
-                rknee = (rhip_x + int(stride*0.80), hip_y + thigh_len - int(lift*0.3))
+                rknee = (rhip_x + int(stride*0.55), hip_y + int(thigh_len*0.55))
                 rfoot = (rhip_x + int(stride*0.5), GROUND_Y)
 
             else:
                 # UP (9-11) — ліва нога попереду, права на носку
-                # Ліва нога — попереду, коліно ВИРАЗНО вперед (за стопою!)
-                lknee = (lhip_x + int(stride*1.20), hip_y + thigh_len - int(lift*0.6))
+                # Ліва нога — попереду, коліно ВИСОКО і вперед
+                lknee = (lhip_x + int(stride*0.70), hip_y + int(thigh_len*0.45))
                 lfoot = (lhip_x + stride, GROUND_Y)
 
                 # Права нога (задня) — на носку, коліно назад
-                rknee = (rhip_x - int(stride*0.35), hip_y + thigh_len - int(lift*0.45))
+                rknee = (rhip_x - int(stride*0.35), hip_y + int(thigh_len*0.55))
                 rfoot = (rhip_x - int(stride*0.3), GROUND_Y - int(lift*0.4))
             
             # Якщо дивиться вліво — дзеркально відображаємо
@@ -1006,16 +1007,15 @@ def draw_char(draw, fi, cx, char_id, walking=False, direction=0, talking=False, 
             rfoot  = (cx+int(48*S)+int(r_sw),       GROUND_Y-int(r_li))
     else:
         if is_profile:
-            # Профіль стоячи — ТІЛЬКИ ОДНА нога (передня)
-            # Права нога попереду якщо дивиться вправо
+            # Профіль стоячи — ТІЛЬКИ ОДНА нога (передня) з ЦЕНТРУ
             if facing_right:
-                rknee  = (cx + int(HIP_W), HIP_Y+int(85*S))
-                rfoot  = (cx + int(HIP_W), GROUND_Y)
+                rknee  = (cx, HIP_Y+int(85*S))
+                rfoot  = (cx, GROUND_Y)
                 lknee = None  # задня нога не малюється
                 lfoot = None
             else:
-                lknee  = (cx - int(HIP_W), HIP_Y+int(85*S))
-                lfoot  = (cx - int(HIP_W), GROUND_Y)
+                lknee  = (cx, HIP_Y+int(85*S))
+                lfoot  = (cx, GROUND_Y)
                 rknee = None  # задня нога не малюється
                 rfoot = None
         else:
