@@ -26,7 +26,7 @@ except ImportError:
 #
 #   1280 × 720 (16:9) — стандарт мультиків (South Park, Family Guy...)
 #   Персонажі ~35% висоти кадру — пропорційні будівлям на фоні
-#   VERSION: 2026-04-03-shoes-fix-face-camera-when-talking
+#   VERSION: 2026-04-03-all-face-camera-simple-shoes
 #
 W, H       = 1280, 720
 FPS        = 25
@@ -193,46 +193,20 @@ def draw_thick_leg(draw, hip_pt, knee_pt, foot_pt, color, width):
     draw.ellipse([knee_pt[0]-r, knee_pt[1]-r, knee_pt[0]+r, knee_pt[1]+r], fill=color)
 
 def draw_foot(draw, knee_pt, foot_pt, color, shoe_len=50):
-    """Малює гарний черевик на кінці ноги — прямокутник з заокругленням."""
-    kx, ky = knee_pt
+    """Малює черевик — простий прямокутник з заокругленням на землі."""
     fx, fy = foot_pt
 
-    # Вектор гомілки (від коліна до стопи)
-    dx, dy = fx - kx, fy - ky
-    L = math.hypot(dx, dy)
-    if L == 0:
-        return
+    # Черевик завжди горизонтальний на землі
+    w = int(shoe_len * 0.40)   # ширина ~20px
+    h = int(shoe_len * 0.22)   # висота ~11px
 
-    # Нормалізований вектор гомілки
-    ux, uy = dx / L, dy / L
+    # Носок трохи виступає вперед
+    x1 = fx - w
+    y1 = fy - h
+    x2 = fx + w + int(w * 0.3)  # носок довший
+    y2 = fy
 
-    # Черевик — прямокутник з заокругленням
-    w = int(shoe_len * 0.45)  # ширина черевика (~22px)
-    h = int(shoe_len * 0.35)  # висота черевика (~17px)
-
-    # Якщо нога вертикальна (fy ≈ GROUND_Y) — малюємо горизонтальний черевик
-    if abs(dy) > abs(dx):  # нога переважно вертикальна
-        # Прямокутник горизонтально на землі
-        x1 = fx - w
-        y1 = fy - h
-        x2 = fx + w
-        y2 = fy + h
-        draw.rounded_rectangle([x1, y1, x2, y2], radius=5, fill=color, outline=STICK_LINE, width=2)
-    else:
-        # Нога під кутом — орієнтуємо черевик по напрямку гомілки
-        px, py = -uy, ux  # перпендикуляр
-        # Черевик на кінці ноги
-        toe_x = fx + ux * int(shoe_len * 0.3)
-        toe_y = fy + uy * int(shoe_len * 0.3)
-        heel_x = fx - ux * int(shoe_len * 0.15)
-        heel_y = fy - uy * int(shoe_len * 0.15)
-        pts = [
-            (toe_x + px * w, toe_y + py * w),
-            (toe_x - px * w, toe_y - py * w),
-            (heel_x - px * w, heel_y - py * w),
-            (heel_x + px * w, heel_y + py * w),
-        ]
-        draw.polygon(pts, fill=color, outline=STICK_LINE, width=2)
+    draw.rounded_rectangle([x1, y1, x2, y2], radius=4, fill=color, outline=STICK_LINE, width=2)
 
 # ─── Фони ─────────────────────────────────────────────────────────────────────
 
@@ -1313,12 +1287,9 @@ def render_scene(scene_def, scene_idx, initial_chars, work_dir):
                     # При ходьбі — профіль (боком)
                     direction = 1 if facing_right else 2
                 else:
-                    # Стоїть: якщо говорить — лицем до камери (direction=0)
-                    # Якщо не говорить — зберігає профіль напрямку
-                    if is_talking:
-                        direction = 0  # лицем до камери коли говорить
-                    else:
-                        direction = 1 if facing_right else 2  # профіль
+                    # Стоїть — ВСІ персонажі лицем до камери (фронтально)
+                    direction = 0
+                    facing_camera = True  # два ока симетрично
                 
                 draw_char(draw, fi, int(cx_f), char_id,
                           walking=walking, direction=direction,
