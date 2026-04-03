@@ -1187,13 +1187,17 @@ def render_scene(scene_def, scene_idx, initial_chars, work_dir):
         if 'beat' in dlg:
             audio_paths.append(None)
             audio_durs.append(float(dlg['beat']))
-        else:
+        elif 'text' in dlg:
             cid   = dlg['char']
             voice = CHAR_CFG[cid % len(CHAR_CFG)]['voice']
             path  = os.path.join(work_dir, f'd_{scene_idx}_{i}.mp3')
             asyncio.run(gen_audio(dlg['text'], voice, path))
             audio_paths.append(path)
             audio_durs.append(get_duration(path))
+        else:
+            # Діалог без text і без beat — пропускаємо
+            audio_paths.append(None)
+            audio_durs.append(0.5)
 
     dialog_times = []
     t = enter_end + 0.3
