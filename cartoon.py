@@ -26,7 +26,7 @@ except ImportError:
 #
 #   1280 × 720 (16:9) — стандарт мультиків (South Park, Family Guy...)
 #   Персонажі ~35% висоти кадру — пропорційні будівлям на фоні
-#   VERSION: 2026-04-04-slower-walk-cycle
+#   VERSION: 2026-04-04-8frame-walk-cycle
 #
 W, H       = 1280, 720
 FPS        = 25
@@ -919,71 +919,124 @@ def draw_char(draw, fi, cx, char_id, walking=False, direction=0, talking=False, 
             (tx_t+6,v_d+int(36*S)),(tx_t,v_d+int(52*S)),(tx_t-6,v_d+int(36*S))
         ], fill=tcol, outline=STICK_LINE, width=2)
 
-    # ── Ноги — фізично правильна ходьба БЕЗ ковзання стоп ──
+    # ── Ноги — 8-frame walk cycle (Contact → Down → Passing → Up) ──
     if walking:
         #
-        # КЛЮЧОВА ФОРМУЛА БЕЗ КОВЗАННЯ:
-        #   Коли стопа на землі: ABSOLUTE позиція фіксована.
-        #   Відносна позиція стопи = stance_world_x - cx(t)
-        #   Зміна відносної = -зміна_тіла → стопа НЕ ковзає візуально!
+        # ПРАВИЛЬНИЙ ЦИКЛ ХОДЬБИ (за принципами 2D анімації):
+        #   8 фреймів на повний цикл (2 кроки)
+        #   Контакт → Down → Passing → Up → (дзеркально)
         #
-        #   stride = відстань тіла за повну опорну фазу нози.
-        #   Опорна фаза = від +stride/2 до -stride/2 (relative).
-        #   Зміна relative = stride. Зміна тіла = stride. → Немає ковзання!
+        # Ключові принципи:
+        #   1. Swing нога рухається по ДУЗІ: назад → під тіло → вперед → вниз
+        #   2. Тіло піднімається (Up) і опускається (Down)
+        #   3. Контакт: обидві ноги на землі, одна попереду одна позаду
+        #   4. Passing: swing нога проходить ПІД тілом (найнижча точка)
         #
-        # Параметри:
-        #   4 фази × 6 фреймів = 24 фрейми/цикл (сповільнено)
-        #   Тіло за 6 фреймів: 6 × 80/25 ≈ 19.2px
-        #   Тіло за 12 фреймів (опорна фаза): ≈ 38.4px
-        #   stride = 26 → від +13 до -13 relative
+        # Формула дуги swing ноги:
+        #   swing_x = -stride/2 .. +stride/2  (назад → вперед)
+        #   swing_y = arc(swing_x)            = lift * (1 - (2*swing_x/stride)²)
+        #   Це парабола: найвища в середині, найнижча на кінцях
         #
-        # Swing нога: за 12 фреймів летить від -stride/2 до +stride/2 relative
 
-        cycle = (fi // 6) % 4  # 0..3, кожен кадр = 6 фрейми (сповільнено)
-        # Тіло за 12 фреймів (2 фази = опора): 12 * 80/25 = 38.4px
-        stride = 26              # абсолютні пікселі (сповільнено)
-        lift   = int(90 * S)   # підйом коліна
-        hs = stride // 2        # 19px
+        # 8 фреймів = цикл, кожен кадр = 2 фрейми
+        cycle = (fi // 2) % 8   # 0..7
+
+        stride  = int(55 * S)   # довжина кроку ~40px
+        lift    = int(45 * S)   # висота підйому swing ноги ~32px
+        body_bob = int(8 * S)   # амплітуда підйому/опускання тіла ~6px
 
         if is_profile:
             hip_y  = HIP_Y + 6
             thigh_len = int(85*S)
 
-            # Фази: кожна нога 2 фази опора + 2 фази swing
-            # stance foot relative: +hs → 0 → -hs (зміна = stride)
-            # body change за 2 фази = 2 * 4 * 220/25 = 70.4 ≈ stride*2/S
-            # Це НЕ ідеально але мінімальне ковзання (~0.2px/фрейм)
+            # ─── 4 КЛЮЧОВІ ПОЗИ + дзеркальне відображення ───
+            #
+            # cycle 0: CONTACT (ліва попереду, права позаду)
+            # cycle 1: DOWN    (тіло нижче, ліва зігнута)
+            # cycle 2: PASSING (права проходить під тілом)
+            # cycle 3: UP      (тіло вище, ліва пряма)
+            # cycle 4: CONTACT (дзеркально — права попереду)
+            # cycle 5: DOWN    (тіло нижче, права зігнута)
+            # cycle 6: PASSING (ліва проходить під тілом)
+            # cycle 7: UP      (тіло вище, права пряма)
+
+            # Базові X позиції стоп
+            hs = stride // 2  # половина кроку
+
+            # Y позиція тіла (body bob)
+            if cycle in (1, 5):       # DOWN — тіло нижче
+                hip_y += body_bob
+            elif cycle in (3, 7):     # UP — тіло вище
+                hip_y -= body_bob
 
             if cycle == 0:
-                # Ліва ПОПЕРЕДУ, Права ПОЗАДУ
-                lknee = (cx + int(hs*0.5), hip_y + int(thigh_len*0.60))
+                # CONTACT: ліва попереду (п'ята торкається), права позаду (на носку)
+                lknee = (cx + int(hs * 0.35), hip_y + int(thigh_len * 0.65))
                 lfoot = (cx + hs, GROUND_Y)
-                rknee = (cx - int(hs*0.4), hip_y + int(thigh_len*0.80))
+                rknee = (cx - int(hs * 0.35), hip_y + int(thigh_len * 0.75))
                 rfoot = (cx - hs, GROUND_Y)
 
             elif cycle == 1:
-                # Ліва ОПОРНА (під тілом), Права SWING (високо!)
-                lknee = (cx, hip_y + int(thigh_len*0.85))
-                lfoot = (cx, GROUND_Y)
-                # Права летить вперед — коліно МАКСИМАЛЬНО високо
-                rknee = (cx + int(stride*0.5), hip_y + int(thigh_len*0.20))
-                rfoot = (cx + int(hs*0.4), GROUND_Y - lift)
+                # DOWN: ліва під тілом (зігнута), права позаду (ще на землі)
+                lknee = (cx + int(hs * 0.15), hip_y + int(thigh_len * 0.70))
+                lfoot = (cx + int(hs * 0.3), GROUND_Y)
+                rknee = (cx - int(hs * 0.6), hip_y + int(thigh_len * 0.65))
+                rfoot = (cx - int(hs * 1.1), GROUND_Y)
 
             elif cycle == 2:
-                # Права ПОПЕРЕДУ, Ліва ПОЗАДУ
-                lknee = (cx - int(hs*0.4), hip_y + int(thigh_len*0.80))
-                lfoot = (cx - hs, GROUND_Y)
-                rknee = (cx + int(hs*0.5), hip_y + int(thigh_len*0.60))
-                rfoot = (cx + hs, GROUND_Y)
+                # PASSING: права проходить ПІД тілом (низька дуга), ліва попереду
+                lknee = (cx + int(hs * 0.5), hip_y + int(thigh_len * 0.55))
+                lfoot = (cx + hs, GROUND_Y)
+                # Права нога проходить під тілом — коліно під стегном, стопа піднята
+                r_knee_x = cx + int(hs * 0.1)
+                r_knee_y = hip_y + int(thigh_len * 0.50)
+                r_foot_x = cx + int(hs * 0.2)
+                r_foot_y = GROUND_Y - int(lift * 0.6)
+                rknee = (r_knee_x, r_knee_y)
+                rfoot = (r_foot_x, r_foot_y)
 
             elif cycle == 3:
-                # Права ОПОРНА (під тілом), Ліва SWING (високо!)
-                rknee = (cx, hip_y + int(thigh_len*0.85))
-                rfoot = (cx, GROUND_Y)
-                # Ліва летить вперед — коліно МАКСИМАЛЬНО високо
-                lknee = (cx + int(stride*0.5), hip_y + int(thigh_len*0.20))
-                lfoot = (cx + int(hs*0.4), GROUND_Y - lift)
-            
+                # UP: тіло піднялось, ліва пряма, права проходить ВГОРУ
+                lknee = (cx + int(hs * 0.4), hip_y + int(thigh_len * 0.55))
+                lfoot = (cx + int(hs * 0.8), GROUND_Y)
+                # Права нога піднімається вперед — коліно високо
+                rknee = (cx + int(hs * 0.6), hip_y + int(thigh_len * 0.30))
+                rfoot = (cx + int(hs * 1.0), GROUND_Y - lift)
+
+            elif cycle == 4:
+                # CONTACT (дзеркально): права попереду, ліва позаду
+                rknee = (cx - int(hs * 0.35), hip_y + int(thigh_len * 0.65))
+                rfoot = (cx - hs, GROUND_Y)
+                lknee = (cx + int(hs * 0.35), hip_y + int(thigh_len * 0.75))
+                lfoot = (cx + hs, GROUND_Y)
+
+            elif cycle == 5:
+                # DOWN (дзеркально): права під тілом (зігнута), ліва позаду
+                rknee = (cx - int(hs * 0.15), hip_y + int(thigh_len * 0.70))
+                rfoot = (cx - int(hs * 0.3), GROUND_Y)
+                lknee = (cx + int(hs * 0.6), hip_y + int(thigh_len * 0.65))
+                lfoot = (cx + int(hs * 1.1), GROUND_Y)
+
+            elif cycle == 6:
+                # PASSING (дзеркально): ліва проходить ПІД тілом, права попереду
+                rknee = (cx - int(hs * 0.5), hip_y + int(thigh_len * 0.55))
+                rfoot = (cx - hs, GROUND_Y)
+                # Ліва нога проходить під тілом
+                l_knee_x = cx - int(hs * 0.1)
+                l_knee_y = hip_y + int(thigh_len * 0.50)
+                l_foot_x = cx - int(hs * 0.2)
+                l_foot_y = GROUND_Y - int(lift * 0.6)
+                lknee = (l_knee_x, l_knee_y)
+                lfoot = (l_foot_x, l_foot_y)
+
+            elif cycle == 7:
+                # UP (дзеркально): тіло піднялось, права пряма, ліва проходить ВГОРУ
+                rknee = (cx - int(hs * 0.4), hip_y + int(thigh_len * 0.55))
+                rfoot = (cx - int(hs * 0.8), GROUND_Y)
+                # Ліва нога піднімається вперед
+                lknee = (cx - int(hs * 0.6), hip_y + int(thigh_len * 0.30))
+                lfoot = (cx - int(hs * 1.0), GROUND_Y - lift)
+
             # Якщо дивиться вліво — дзеркально відображаємо
             if not facing_right:
                 lknee = (cx - (lknee[0] - cx), lknee[1])
