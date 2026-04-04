@@ -996,18 +996,18 @@ def draw_char(draw, fi, cx, char_id, walking=False, direction=0, talking=False, 
             # ═══════════════════════════════════════════════════════
 
             if cycle == 0:
-                # CONTACT: ліва попереду ПРЯМА, права позаду зі ЗГИНОМ ВПЕРЕД (вправо)
+                # CONTACT: ліва попереду ПРЯМА, права позаду ПРЯМА (відштовхується)
                 lfoot = (cx + hs, GROUND_Y)
                 lknee = knee_straight(cx, lfoot[0], lfoot[1], fwd=0)
                 rfoot = (cx - hs, GROUND_Y)
-                rknee = knee_straight(cx, rfoot[0], rfoot[1], fwd=int(hs * 0.8))
+                rknee = knee_straight(cx, rfoot[0], rfoot[1], fwd=0)
 
             elif cycle == 1:
-                # DOWN: тіло нижче, ліва ПРЯМА, права позаду зі ЗГИНОМ ВПЕРЕД
+                # DOWN: тіло нижче, ліва ПРЯМА, права позаду ПРЯМА
                 lfoot = (cx + int(hs * 0.3), GROUND_Y)
                 lknee = knee_straight(cx, lfoot[0], lfoot[1], fwd=0)
                 rfoot = (cx - int(hs * 1.0), GROUND_Y)
-                rknee = knee_straight(cx, rfoot[0], rfoot[1], fwd=int(hs * 0.9))
+                rknee = knee_straight(cx, rfoot[0], rfoot[1], fwd=0)
 
             elif cycle == 2:
                 # PASSING: ліва ПРЯМА попереду, права ЗІГНУТА проходить під тілом
@@ -1021,25 +1021,25 @@ def draw_char(draw, fi, cx, char_id, walking=False, direction=0, talking=False, 
             elif cycle == 3:
                 # UP: ліва ПРЯМА, права ЗІГНУТА летить ВПЕРЕД (вправо) вгору
                 lfoot = (cx + int(hs * 0.8), GROUND_Y)
-                lknee = knee_straight(cx, lfoot[0], lfoot[1], fwd=int(hs * 0.15))
+                lknee = knee_straight(cx, lfoot[0], lfoot[1], fwd=0)
                 r_foot_x = cx + int(hs * 1.3)
                 r_foot_y = GROUND_Y - lift
                 rfoot = (r_foot_x, r_foot_y)
                 rknee = knee_bent(cx, r_foot_x, r_foot_y, bend_x=int(hs * 0.7), bend_y_factor=0.25)
 
             elif cycle == 4:
-                # CONTACT (дзеркально): права попереду ПРЯМА, ліва позаду зі ЗГИНОМ ВПЕРЕД
+                # CONTACT (дзеркально): права попереду ПРЯМА, ліва позаду ПРЯМА
                 rfoot = (cx - hs, GROUND_Y)
                 rknee = knee_straight(cx, rfoot[0], rfoot[1], fwd=0)
                 lfoot = (cx + hs, GROUND_Y)
-                lknee = knee_straight(cx, lfoot[0], lfoot[1], fwd=int(hs * 0.8))
+                lknee = knee_straight(cx, lfoot[0], lfoot[1], fwd=0)
 
             elif cycle == 5:
-                # DOWN (дзеркально): тіло нижче, права ПРЯМА, ліва позаду зі ЗГИНОМ ВПЕРЕД
+                # DOWN (дзеркально): тіло нижче, права ПРЯМА, ліва позаду ПРЯМА
                 rfoot = (cx - int(hs * 0.3), GROUND_Y)
                 rknee = knee_straight(cx, rfoot[0], rfoot[1], fwd=0)
                 lfoot = (cx + int(hs * 1.0), GROUND_Y)
-                lknee = knee_straight(cx, lfoot[0], lfoot[1], fwd=int(hs * 0.9))
+                lknee = knee_straight(cx, lfoot[0], lfoot[1], fwd=0)
 
             elif cycle == 6:
                 # PASSING (дзеркально): права ПРЯМА попереду, ліва ЗІГНУТА під тілом
@@ -1053,7 +1053,7 @@ def draw_char(draw, fi, cx, char_id, walking=False, direction=0, talking=False, 
             elif cycle == 7:
                 # UP (дзеркально): права ПРЯМА, ліва ЗІГНУТА летить ВПЕРЕД (вліво!) вгору
                 rfoot = (cx - int(hs * 0.8), GROUND_Y)
-                rknee = knee_straight(cx, rfoot[0], rfoot[1], fwd=int(-hs * 0.15))
+                rknee = knee_straight(cx, rfoot[0], rfoot[1], fwd=0)
                 l_foot_x = cx - int(hs * 1.3)
                 l_foot_y = GROUND_Y - lift
                 lfoot = (l_foot_x, l_foot_y)
