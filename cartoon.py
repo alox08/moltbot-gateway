@@ -1104,36 +1104,32 @@ def draw_char(draw, fi, cx, char_id, walking=False, direction=0, talking=False, 
     r_sh  = max(3, int(4*S))
     
     if is_profile and walking:
-        # Для профілю визначаємо яка нога позаду
-        # Нога що має менший X (якщо дивиться вправо) або більший X (якщо вліво) — позаду
+        # Для профілю визначаємо яка нога попереду по X координаті стопи
+        # Персонаж йде в напрямку facing_right — попереду та нога що далі в тому напрямку
         if facing_right:
-            back_leg = 'left' if lfoot[0] < rfoot[0] else 'right'
+            front_leg = 'right' if rfoot[0] > lfoot[0] else 'left'
         else:
-            back_leg = 'right' if rfoot[0] > lfoot[0] else 'left'
-        
+            front_leg = 'left' if lfoot[0] < rfoot[0] else 'right'
+
         # Задня нога — трохи темніша (в тіні)
         back_col = (35, 35, 35)  # темніший за STICK_LINE
         front_col = STICK_LINE
 
-        # Малюємо спочатку задню ногу
-        if back_leg == 'left':
+        # Малюємо спочатку задню ногу, потім передню
+        if front_leg == 'right':
             # Ліва нога позаду — малюємо першою
             lhip_pt = (cx, HIP_Y + 6)
             draw_thick_leg(draw, lhip_pt, lknee, lfoot, back_col, LEG_W)
             draw_foot(draw, lknee, lfoot, back_col, shoe, facing_right)
-        else:
-            # Права нога позаду — малюємо першою
-            rhip_pt = (cx, HIP_Y + 6)
-            draw_thick_leg(draw, rhip_pt, rknee, rfoot, back_col, LEG_W)
-            draw_foot(draw, rknee, rfoot, back_col, shoe, facing_right)
-
-        # Потім передню ногу (вже намальовано куртку вище)
-        if back_leg == 'left':
             # Права нога попереду — малюємо другою
             rhip_pt = (cx, HIP_Y + 6)
             draw_thick_leg(draw, rhip_pt, rknee, rfoot, front_col, LEG_W)
             draw_foot(draw, rknee, rfoot, front_col, shoe, facing_right)
         else:
+            # Права нога позаду — малюємо першою
+            rhip_pt = (cx, HIP_Y + 6)
+            draw_thick_leg(draw, rhip_pt, rknee, rfoot, back_col, LEG_W)
+            draw_foot(draw, rknee, rfoot, back_col, shoe, facing_right)
             # Ліва нога попереду — малюємо другою
             lhip_pt = (cx, HIP_Y + 6)
             draw_thick_leg(draw, lhip_pt, lknee, lfoot, front_col, LEG_W)
