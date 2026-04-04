@@ -26,7 +26,7 @@ except ImportError:
 #
 #   1280 × 720 (16:9) — стандарт мультиків (South Park, Family Guy...)
 #   Персонажі ~35% висоти кадру — пропорційні будівлям на фоні
-#   VERSION: 2026-04-04-straight-stance-leg
+#   VERSION: 2026-04-04-knee-fwd-always
 #
 W, H       = 1280, 720
 FPS        = 25
@@ -970,93 +970,94 @@ def draw_char(draw, fi, cx, char_id, walking=False, direction=0, talking=False, 
                 hip_y -= body_bob
 
             # ─── Хелпери для колін ───
-            def knee_straight(hip_x, foot_x, foot_y):
-                """Пряма нога — коліно ТОЧНО на лінії стегно-стопа."""
+            def knee_straight(hip_x, foot_x, foot_y, fwd=0):
+                """Нога що стоїть на землі — коліно на лінії + згин ВПЕРЕД.
+                fwd > 0 зміщує коліно вперед (в напрямку ходьби)."""
                 dx = foot_x - hip_x
                 dy = foot_y - hip_y
                 dist = math.hypot(dx, dy)
                 if dist == 0:
                     return (hip_x, hip_y + thigh_len)
                 t = thigh_len / dist
-                kx = hip_x + dx * t
+                kx = hip_x + dx * t + fwd
                 ky = hip_y + dy * t
                 return (int(kx), int(ky))
 
             def knee_bent(hip_x, foot_x, foot_y, bend_x, bend_y_factor):
-                """Зігнута нога — коліно зміщене на bend_x вперед/назад."""
+                """Зігнута нога (в повітрі) — коліно зміщене bend_x (позитив = вправо/вперед)."""
                 mid_x = (hip_x + foot_x) / 2
-                mid_y = (hip_y + foot_y) / 2
                 kx = mid_x + bend_x
                 ky = hip_y + int(thigh_len * bend_y_factor)
                 return (int(kx), ky)
 
+            # ═══════════════════════════════════════════════════════
+            # ВСІ ПОЗИ РОЗРАХОВАНІ ДЛЯ facing_right=True (йде вправо)
+            # Блок "if not facing_right" внизу дзеркально відобразить все.
+            # ═══════════════════════════════════════════════════════
+
             if cycle == 0:
-                # CONTACT: ліва попереду ПРЯМА, права позаду ПРЯМА
+                # CONTACT: ліва попереду ПРЯМА, права позаду зі ЗГИНОМ ВПЕРЕД (вправо)
                 lfoot = (cx + hs, GROUND_Y)
-                lknee = knee_straight(cx, lfoot[0], lfoot[1])
+                lknee = knee_straight(cx, lfoot[0], lfoot[1], fwd=0)
                 rfoot = (cx - hs, GROUND_Y)
-                rknee = knee_straight(cx, rfoot[0], rfoot[1])
+                rknee = knee_straight(cx, rfoot[0], rfoot[1], fwd=int(hs * 0.8))
 
             elif cycle == 1:
-                # DOWN: тіло нижче, ліва ПРЯМА під тілом, права позаду ПРЯМА
-                lfoot = (cx + int(hs * 0.4), GROUND_Y)
-                lknee = knee_straight(cx, lfoot[0], lfoot[1])
-                rfoot = (cx - int(hs * 1.2), GROUND_Y)
-                rknee = knee_straight(cx, rfoot[0], rfoot[1])
+                # DOWN: тіло нижче, ліва ПРЯМА, права позаду зі ЗГИНОМ ВПЕРЕД
+                lfoot = (cx + int(hs * 0.3), GROUND_Y)
+                lknee = knee_straight(cx, lfoot[0], lfoot[1], fwd=0)
+                rfoot = (cx - int(hs * 1.0), GROUND_Y)
+                rknee = knee_straight(cx, rfoot[0], rfoot[1], fwd=int(hs * 0.9))
 
             elif cycle == 2:
                 # PASSING: ліва ПРЯМА попереду, права ЗІГНУТА проходить під тілом
                 lfoot = (cx + hs, GROUND_Y)
-                lknee = knee_straight(cx, lfoot[0], lfoot[1])
-                # Права swing — коліно підняте і попереду
-                r_foot_x = cx + int(hs * 0.3)
-                r_foot_y = GROUND_Y - int(lift * 0.4)
+                lknee = knee_straight(cx, lfoot[0], lfoot[1], fwd=0)
+                r_foot_x = cx + int(hs * 0.2)
+                r_foot_y = GROUND_Y - int(lift * 0.3)
                 rfoot = (r_foot_x, r_foot_y)
-                rknee = knee_bent(cx, r_foot_x, r_foot_y, bend_x=int(hs * 0.6), bend_y_factor=0.40)
+                rknee = knee_bent(cx, r_foot_x, r_foot_y, bend_x=int(hs * 0.9), bend_y_factor=0.35)
 
             elif cycle == 3:
-                # UP: ліва ПРЯМА (майже), права ЗІГНУТА летить ВПЕРЕД вгору
-                lfoot = (cx + int(hs * 1.0), GROUND_Y)
-                lknee = knee_straight(cx, lfoot[0], lfoot[1])
-                # Права swing — високо і далеко вперед
-                r_foot_x = cx + int(hs * 1.4)
+                # UP: ліва ПРЯМА, права ЗІГНУТА летить ВПЕРЕД (вправо) вгору
+                lfoot = (cx + int(hs * 0.8), GROUND_Y)
+                lknee = knee_straight(cx, lfoot[0], lfoot[1], fwd=int(hs * 0.15))
+                r_foot_x = cx + int(hs * 1.3)
                 r_foot_y = GROUND_Y - lift
                 rfoot = (r_foot_x, r_foot_y)
-                rknee = knee_bent(cx, r_foot_x, r_foot_y, bend_x=int(hs * 0.8), bend_y_factor=0.25)
+                rknee = knee_bent(cx, r_foot_x, r_foot_y, bend_x=int(hs * 0.7), bend_y_factor=0.25)
 
             elif cycle == 4:
-                # CONTACT (дзеркально): права ПРЯМА попереду, ліва ПРЯМА позаду
+                # CONTACT (дзеркально): права попереду ПРЯМА, ліва позаду зі ЗГИНОМ ВПЕРЕД
                 rfoot = (cx - hs, GROUND_Y)
-                rknee = knee_straight(cx, rfoot[0], rfoot[1])
+                rknee = knee_straight(cx, rfoot[0], rfoot[1], fwd=0)
                 lfoot = (cx + hs, GROUND_Y)
-                lknee = knee_straight(cx, lfoot[0], lfoot[1])
+                lknee = knee_straight(cx, lfoot[0], lfoot[1], fwd=int(hs * 0.8))
 
             elif cycle == 5:
-                # DOWN (дзеркально): тіло нижче, права ПРЯМА під тілом, ліва позаду ПРЯМА
-                rfoot = (cx - int(hs * 0.4), GROUND_Y)
-                rknee = knee_straight(cx, rfoot[0], rfoot[1])
-                lfoot = (cx + int(hs * 1.2), GROUND_Y)
-                lknee = knee_straight(cx, lfoot[0], lfoot[1])
+                # DOWN (дзеркально): тіло нижче, права ПРЯМА, ліва позаду зі ЗГИНОМ ВПЕРЕД
+                rfoot = (cx - int(hs * 0.3), GROUND_Y)
+                rknee = knee_straight(cx, rfoot[0], rfoot[1], fwd=0)
+                lfoot = (cx + int(hs * 1.0), GROUND_Y)
+                lknee = knee_straight(cx, lfoot[0], lfoot[1], fwd=int(hs * 0.9))
 
             elif cycle == 6:
                 # PASSING (дзеркально): права ПРЯМА попереду, ліва ЗІГНУТА під тілом
                 rfoot = (cx - hs, GROUND_Y)
-                rknee = knee_straight(cx, rfoot[0], rfoot[1])
-                # Ліва swing — коліно підняте і попереду
-                l_foot_x = cx - int(hs * 0.3)
-                l_foot_y = GROUND_Y - int(lift * 0.4)
+                rknee = knee_straight(cx, rfoot[0], rfoot[1], fwd=0)
+                l_foot_x = cx - int(hs * 0.2)
+                l_foot_y = GROUND_Y - int(lift * 0.3)
                 lfoot = (l_foot_x, l_foot_y)
-                lknee = knee_bent(cx, l_foot_x, l_foot_y, bend_x=int(-hs * 0.6), bend_y_factor=0.40)
+                lknee = knee_bent(cx, l_foot_x, l_foot_y, bend_x=int(-hs * 0.9), bend_y_factor=0.35)
 
             elif cycle == 7:
-                # UP (дзеркально): права ПРЯМА (майже), ліва ЗІГНУТА летить ВПЕРЕД вгору
-                rfoot = (cx - int(hs * 1.0), GROUND_Y)
-                rknee = knee_straight(cx, rfoot[0], rfoot[1])
-                # Ліва swing — високо і далеко вперед
-                l_foot_x = cx - int(hs * 1.4)
+                # UP (дзеркально): права ПРЯМА, ліва ЗІГНУТА летить ВПЕРЕД (вліво!) вгору
+                rfoot = (cx - int(hs * 0.8), GROUND_Y)
+                rknee = knee_straight(cx, rfoot[0], rfoot[1], fwd=int(-hs * 0.15))
+                l_foot_x = cx - int(hs * 1.3)
                 l_foot_y = GROUND_Y - lift
                 lfoot = (l_foot_x, l_foot_y)
-                lknee = knee_bent(cx, l_foot_x, l_foot_y, bend_x=int(-hs * 0.8), bend_y_factor=0.25)
+                lknee = knee_bent(cx, l_foot_x, l_foot_y, bend_x=int(-hs * 0.7), bend_y_factor=0.25)
 
             # Якщо дивиться вліво — дзеркально відображаємо
             if not facing_right:
