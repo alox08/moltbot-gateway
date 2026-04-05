@@ -1345,7 +1345,7 @@ def render_scene(scene_def, scene_idx, initial_chars, work_dir):
                             beat_emotions[bc] = dlg.get('emotion', 'normal')
                     else:
                         talking_char = dlg['char']
-                        bubble_text  = dlg['text']
+                        bubble_text  = dlg.get('text', '')
                         bubble_emot  = dlg.get('emotion', 'normal')
                         current_dlg  = dlg
                     break
