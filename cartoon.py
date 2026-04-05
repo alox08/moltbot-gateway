@@ -639,8 +639,7 @@ def draw_face(draw, fi, cx, facing_right, emotion, talking, facing_camera=False)
         mh = int(22*S)
         rx1, ry1 = cx - mw + mx_off, my - mh//2
         rx2, ry2 = cx + mw + mx_off, my + mh//2
-        draw.chord([rx1, ry1, rx2, ry2], 0, 180, fill=STICK_LINE, outline=STICK_LINE, width=LW)
-        draw.chord([rx1+LW, ry1+LW, rx2-LW, ry2-LW], 0, 180, fill=(220, 80, 80)) # язик
+        draw.chord([rx1, ry1, rx2, ry2], 0, 180, fill=(220, 80, 80), outline=STICK_LINE, width=LW)
     elif emotion == 'angry' or emotion == 'sad':
         # Перевернута лінія
         draw.arc([cx-int(12*S)+mx_off, my-int(6*S), cx+int(12*S)+mx_off, my+int(10*S)], 180, 360, fill=STICK_LINE, width=LW)
