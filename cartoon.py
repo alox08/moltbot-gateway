@@ -806,6 +806,7 @@ def draw_char(draw, fi, cx, char_id, walking=False, direction=0, talking=False, 
     facing_right = (direction == 1)  # 1=праворуч, 2=ліворуч
     fs    = int(6*S) if facing_right else (-int(6*S) if direction == 2 else 0)
     hip_w = SHIRT_W + int(14*S)
+    jacket_w = int(hip_w * 0.5)  # вужче в 2 рази для профілю
     # Плечо — верх куртки (одразу нижче шиї)
     arm_y = NECK_Y  + int(10*S)   # точка плеча (вище, ближче до шиї)
 
@@ -905,7 +906,6 @@ def draw_char(draw, fi, cx, char_id, walking=False, direction=0, talking=False, 
     
     if is_profile:
         # Профіль — вужче тіло (еліпс)
-        jacket_w = int(hip_w * 0.5)  # вужче в 2 рази
         draw.rounded_rectangle([cx-jacket_w, NECK_Y+4, cx+jacket_w, HIP_Y+8],
                                 radius=int(18*S), fill=jcol, outline=STICK_LINE, width=3)
         # Краватка видно збоку
