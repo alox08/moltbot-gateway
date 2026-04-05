@@ -594,58 +594,66 @@ BG = {
 
 def draw_face(draw, fi, cx, facing_right, emotion, talking, facing_camera=False):
     """
-    Loading Artist стиль — великі очі з накладанням, які виступають за обличчя.
-    Немає носу, прості роти.
+    Класичні об'єднані коміксні очі (як одна ціла маска) з красивим накладанням.
+    Рот розташовується безпосередньо під очима.
     """
     is_profile = not facing_camera
     
-    er = int(32*S)  # Очі трохи менші ніж були, щоб не перекривали все обличчя
-    pr = int(12*S)  # Зіниці
-    ey = HEAD_CY - int(6*S)
+    er = int(24*S)  # Оптимальний коміксний розмір
+    pr = int(8*S)   # Зіниці
+    ey = HEAD_CY - int(12*S)
     
     if emotion == 'surprised':
         er = int(er * 1.2)
         pr = int(pr * 1.2)
         
-    def draw_eye(ecx, e_color=WHITE):
-        draw.ellipse([ecx-er, ey-er, ecx+er, ey+er], fill=e_color, outline=STICK_LINE, width=LW)
-        # Зіниця (дивиться трохи вперед)
-        px_off = int(10*S) if facing_right and not facing_camera else (0 if facing_camera else -int(10*S))
-        draw.ellipse([ecx+px_off-pr, ey-pr, ecx+px_off+pr, ey+pr], fill=STICK_LINE)
-        
     if facing_camera:
-        # Два ока (фронтально накладаються)
-        el_cx = cx - int(18*S)
-        er_cx = cx + int(18*S)
-        draw_eye(el_cx)
-        draw_eye(er_cx)
+        el_cx = cx - int(14*S)
+        er_cx = cx + int(14*S)
+        
+        # 1. Чорні дуги навколо (овали з контуром)
+        draw.ellipse([el_cx-er, ey-er, el_cx+er, ey+er], fill=WHITE, outline=STICK_LINE, width=LW)
+        draw.ellipse([er_cx-er, ey-er, er_cx+er, ey+er], fill=WHITE, outline=STICK_LINE, width=LW)
+        # 2. Центр замальовуємо білим, щоб очі з'єднались в єдине ціле
+        draw.rectangle([cx-er//2, ey-er+LW+1, cx+er//2, ey+er-LW-1], fill=WHITE)
+        
+        # Зіниці
+        px_off = int(6*S) if facing_right else -int(6*S)
+        draw.ellipse([el_cx+px_off-pr, ey-pr, el_cx+px_off+pr, ey+pr], fill=STICK_LINE)
+        draw.ellipse([er_cx+px_off-pr, ey-pr, er_cx+px_off+pr, ey+pr], fill=STICK_LINE)
     else:
-        # Два ока в профіль, сильно випирають вперед
+        # Профіль: очі висунуті і зліплені
         dir_mult = 1 if facing_right else -1
-        far_eye_cx = cx + dir_mult * int(HEAD_RX * 0.9)
-        near_eye_cx = cx + dir_mult * int(HEAD_RX * 1.1)
-        # Спочатку малюємо дальнє око
-        draw_eye(far_eye_cx)
-        # Потім ближнє око (накладається зверху)
-        draw_eye(near_eye_cx)
+        near_eye_cx = cx + dir_mult * int(HEAD_RX * 0.65)
+        far_eye_cx = near_eye_cx + dir_mult * int(18*S)
+        
+        # Малюємо дальнє, потім ближнє
+        draw.ellipse([far_eye_cx-er, ey-er, far_eye_cx+er, ey+er], fill=WHITE, outline=STICK_LINE, width=LW)
+        draw.ellipse([near_eye_cx-er, ey-er, near_eye_cx+er, ey+er], fill=WHITE, outline=STICK_LINE, width=LW)
+        # Об'єднуємо
+        overlap_x1 = min(near_eye_cx, far_eye_cx)
+        overlap_x2 = max(near_eye_cx, far_eye_cx)
+        draw.rectangle([overlap_x1, ey-er+LW+1, overlap_x2, ey+er-LW-1], fill=WHITE)
+        
+        # Зіниці
+        px_off = int(6*S) * dir_mult
+        draw.ellipse([far_eye_cx+px_off-pr, ey-pr, far_eye_cx+px_off+pr, ey+pr], fill=STICK_LINE)
+        draw.ellipse([near_eye_cx+px_off-pr, ey-pr, near_eye_cx+px_off+pr, ey+pr], fill=STICK_LINE)
     
-    # ── Рот (D-форма) ──
-    my = HEAD_CY + int(42*S)
-    mx_off = 0 if facing_camera else (int(35*S) if facing_right else -int(35*S))
+    # ── Рот (кумедний, високо біля очей) ──
+    my = ey + er + int(10*S)
+    mx_off = 0 if facing_camera else int(HEAD_RX * 0.65) * (1 if facing_right else -1)
     
     if emotion == 'surprised' or (talking and (fi//4) % 2 == 0):
-        # D-рот
-        mw = int(15*S)
-        mh = int(22*S)
+        mw = int(12*S)
+        mh = int(18*S)
         rx1, ry1 = cx - mw + mx_off, my - mh//2
         rx2, ry2 = cx + mw + mx_off, my + mh//2
         draw.chord([rx1, ry1, rx2, ry2], 0, 180, fill=(220, 80, 80), outline=STICK_LINE, width=LW)
     elif emotion == 'angry' or emotion == 'sad':
-        # Перевернута лінія
-        draw.arc([cx-int(12*S)+mx_off, my-int(6*S), cx+int(12*S)+mx_off, my+int(10*S)], 180, 360, fill=STICK_LINE, width=LW)
+        draw.arc([cx-int(10*S)+mx_off, my-int(6*S), cx+int(10*S)+mx_off, my+int(10*S)], 180, 360, fill=STICK_LINE, width=LW)
     else:
-        # Дуга (посмишка)
-        draw.arc([cx-int(12*S)+mx_off, my-int(8*S), cx+int(12*S)+mx_off, my+int(12*S)], 0, 180, fill=STICK_LINE, width=LW)
+        draw.arc([cx-int(10*S)+mx_off, my-int(6*S), cx+int(10*S)+mx_off, my+int(10*S)], 0, 180, fill=STICK_LINE, width=LW)
 
 # ─── Хвіст Поліни (Loading Artist стиль) ───────────────────────────────────────
 
@@ -808,44 +816,33 @@ def draw_char(draw, fi, cx, char_id, walking=False, direction=0, talking=False, 
         # У фронтальному вигляді ми просто малюємо обидві руки ПІСЛЯ куртки
         pass
 
-    # ── Тіло (Loading Artist стиль - трапеція) ──
-    # Polina (char_id == 1) має рожеве плаття-трапецію
-    # Хлопці (char_id == 0, 2) мають відкриту куртку
+    # ── Тіло (М'якший коміксний стиль) ──
+    # Polina (char_id == 1) має рожеву сукню-трапецію
+    # Хлопці (char_id == 0, 2) мають акуратні заокруглені куртки
     
-    top_w = jacket_w if is_profile else int(hip_w * 0.7)
-    bot_w = int(jacket_w * 1.3) if is_profile else int(hip_w * 1.1)
-    
-    # Зміщуємо тіло в профіль трохи назад для балансу
+    body_w = jacket_w if is_profile else hip_w
     b_cx = cx - (int(8*S) if facing_right else -int(8*S)) if is_profile else cx
     
-    body_pts = [
-        (b_cx - top_w, NECK_Y),
-        (b_cx + top_w, NECK_Y),
-        (b_cx + bot_w, HIP_Y + 10),
-        (b_cx - bot_w, HIP_Y + 10)
-    ]
-    
-    # Основна заливка (сукня або куртка)
-    draw.polygon(body_pts, fill=jcol, outline=STICK_LINE, width=LW)
-    
-    # Деталі одягу (футболка всередині для хлопців)
-    if char_id != 1:
+    if char_id == 1:
+        # А-силует для Поліни
+        top_w = int(body_w * 0.7)
+        bot_w = int(body_w * 1.3)
+        draw.polygon([
+            (b_cx - top_w, NECK_Y), (b_cx + top_w, NECK_Y),
+            (b_cx + bot_w, HIP_Y + 10), (b_cx - bot_w, HIP_Y + 10)
+        ], fill=jcol, outline=STICK_LINE, width=LW)
+    else:
+        # Нормальне заокруглене тіло для хлопців
+        draw.rounded_rectangle([b_cx-body_w, NECK_Y, b_cx+body_w, HIP_Y+8],
+                                radius=int(18*S), fill=jcol, outline=STICK_LINE, width=LW)
+        # Біла смуга футболки посередині
         if is_profile:
-            stripe_w = int(12*S)
-            sx = b_cx + (int(2*S) if facing_right else -int(12*S) - int(2*S))
-            # Біла лінія футболки
-            draw.polygon([
-                (sx, NECK_Y + LW//2 + 2), (sx + stripe_w, NECK_Y + LW//2 + 2),
-                (sx + stripe_w*(1 if facing_right else -1), HIP_Y + 9),
-                (sx + int(4*S)*(1 if facing_right else -1), HIP_Y + 9)
-            ], fill=WHITE, outline=STICK_LINE, width=max(2, int(LW*0.6)))
+            sw = int(10*S)
+            sx = b_cx + (int(2*S) if facing_right else -int(10*S) - int(2*S))
+            draw.rectangle([sx, NECK_Y, sx+sw, HIP_Y+6], fill=WHITE, outline=STICK_LINE, width=max(2, int(LW*0.6)))
         else:
-            sw_top = int(14*S)
-            sw_bot = int(16*S)
-            draw.polygon([
-                (cx-sw_top, NECK_Y), (cx+sw_top, NECK_Y),
-                (cx+sw_bot, HIP_Y+10), (cx-sw_bot, HIP_Y+10)
-            ], fill=WHITE, outline=STICK_LINE, width=max(2, int(LW*0.6)))
+            sw = int(14*S)
+            draw.rectangle([cx-sw, NECK_Y, cx+sw, HIP_Y+6], fill=WHITE, outline=STICK_LINE, width=max(2, int(LW*0.6)))
 
     # ── Передня рука (Ближня) малюється ПІСЛЯ куртки ──
     if is_profile:
