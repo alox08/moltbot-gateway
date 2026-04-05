@@ -69,8 +69,8 @@ ARM_LEN  = int(90  * S)   # = 43
 SHIRT_W  = int(62  * S)   # = 29
 SLEEVE_W = max(8,  int(17 * S))   # = 8
 HIP_W    = int(70 * S)    # = 34 (ширина розташування стегон)
-LEG_W    = max(12, int(26 * S))   # = 17 -> thicker
-LW       = max(7,  int(15 * S))   # = massive outline
+LEG_W    = max(12, int(24 * S))   # зменшено товщину
+LW       = max(5,  int(9 * S))    # м'якший контур
 
 
 # ─── Слоти позицій (1280px) ───────────────────────────────────────────────────
@@ -599,9 +599,9 @@ def draw_face(draw, fi, cx, facing_right, emotion, talking, facing_camera=False)
     """
     is_profile = not facing_camera
     
-    er = int(36*S)  # дуже великі очі
-    pr = int(10*S)  # зіниці менші, щоб здавалися більш коміксними
-    ey = HEAD_CY - int(10*S)
+    er = int(32*S)  # Очі трохи менші ніж були, щоб не перекривали все обличчя
+    pr = int(12*S)  # Зіниці
+    ey = HEAD_CY - int(6*S)
     
     if emotion == 'surprised':
         er = int(er * 1.2)
@@ -610,20 +610,20 @@ def draw_face(draw, fi, cx, facing_right, emotion, talking, facing_camera=False)
     def draw_eye(ecx, e_color=WHITE):
         draw.ellipse([ecx-er, ey-er, ecx+er, ey+er], fill=e_color, outline=STICK_LINE, width=LW)
         # Зіниця (дивиться трохи вперед)
-        px_off = int(6*S) if facing_right and not facing_camera else (0 if facing_camera else -int(6*S))
+        px_off = int(10*S) if facing_right and not facing_camera else (0 if facing_camera else -int(10*S))
         draw.ellipse([ecx+px_off-pr, ey-pr, ecx+px_off+pr, ey+pr], fill=STICK_LINE)
         
     if facing_camera:
         # Два ока (фронтально накладаються)
-        el_cx = cx - int(24*S)
-        er_cx = cx + int(24*S)
+        el_cx = cx - int(18*S)
+        er_cx = cx + int(18*S)
         draw_eye(el_cx)
         draw_eye(er_cx)
     else:
-        # Два ока в профіль, обидва випирають з обличчя вперед!
+        # Два ока в профіль, сильно випирають вперед
         dir_mult = 1 if facing_right else -1
-        far_eye_cx = cx + dir_mult * int(38*S)
-        near_eye_cx = cx + dir_mult * int(58*S)
+        far_eye_cx = cx + dir_mult * int(HEAD_RX * 0.9)
+        near_eye_cx = cx + dir_mult * int(HEAD_RX * 1.1)
         # Спочатку малюємо дальнє око
         draw_eye(far_eye_cx)
         # Потім ближнє око (накладається зверху)
@@ -657,9 +657,12 @@ def draw_ponytail(draw, cx, facing_right, draw_base=False):
     
     # Якщо draw_base, малюємо передню "шапочку" волосся під очима
     if draw_base:
-        hw = int(HEAD_RX * 0.7) + int(4*S) if is_profile else HEAD_RX + int(4*S)
+        hw = HEAD_RY + int(4*S) if is_profile else HEAD_RX + int(4*S)
         hh = HEAD_RY + int(4*S)
-        draw.chord([head_cx-hw, HEAD_CY-hh, head_cx+hw, HEAD_CY+hh], 170, 370, fill=HAIR_COL, outline=STICK_LINE, width=LW)
+        # Малюємо шапочку БЕЗ контуру, щоб не розрізати обличчя лінією
+        draw.chord([head_cx-hw, HEAD_CY-hh, head_cx+hw, HEAD_CY+hh], 170, 370, fill=HAIR_COL)
+        # Малюємо тільки верхню дугу
+        draw.arc([head_cx-hw, HEAD_CY-hh, head_cx+hw, HEAD_CY+hh], 170, 370, fill=STICK_LINE, width=LW)
         return
 
     # Задній хвіст
@@ -809,8 +812,8 @@ def draw_char(draw, fi, cx, char_id, walking=False, direction=0, talking=False, 
     # Polina (char_id == 1) має рожеве плаття-трапецію
     # Хлопці (char_id == 0, 2) мають відкриту куртку
     
-    top_w = jacket_w if is_profile else int(hip_w * 0.8)
-    bot_w = int(jacket_w * 1.6) if is_profile else int(hip_w * 1.5)
+    top_w = jacket_w if is_profile else int(hip_w * 0.7)
+    bot_w = int(jacket_w * 1.3) if is_profile else int(hip_w * 1.1)
     
     # Зміщуємо тіло в профіль трохи назад для балансу
     b_cx = cx - (int(8*S) if facing_right else -int(8*S)) if is_profile else cx
@@ -828,17 +831,17 @@ def draw_char(draw, fi, cx, char_id, walking=False, direction=0, talking=False, 
     # Деталі одягу (футболка всередині для хлопців)
     if char_id != 1:
         if is_profile:
-            stripe_w = int(18*S)
-            sx = b_cx + (int(4*S) if facing_right else -int(18*S) - int(4*S))
+            stripe_w = int(12*S)
+            sx = b_cx + (int(2*S) if facing_right else -int(12*S) - int(2*S))
             # Біла лінія футболки
             draw.polygon([
                 (sx, NECK_Y + LW//2 + 2), (sx + stripe_w, NECK_Y + LW//2 + 2),
                 (sx + stripe_w*(1 if facing_right else -1), HIP_Y + 9),
-                (sx + int(8*S)*(1 if facing_right else -1), HIP_Y + 9)
+                (sx + int(4*S)*(1 if facing_right else -1), HIP_Y + 9)
             ], fill=WHITE, outline=STICK_LINE, width=max(2, int(LW*0.6)))
         else:
-            sw_top = int(18*S)
-            sw_bot = int(24*S)
+            sw_top = int(14*S)
+            sw_bot = int(16*S)
             draw.polygon([
                 (cx-sw_top, NECK_Y), (cx+sw_top, NECK_Y),
                 (cx+sw_bot, HIP_Y+10), (cx-sw_bot, HIP_Y+10)
