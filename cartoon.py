@@ -1224,18 +1224,18 @@ def wrap_subtitle(text, max_chars=42):
 def draw_subtitle(draw, text, font):
     """Малює субтитри: чорна смуга + білий текст знизу кадру."""
     lines = wrap_subtitle(text) or ['...']
-    line_h = 32
-    pad_y = 10
+    line_h = 24
+    pad_y = 4
     pad_x = 20
-    
+
     # Обчислюємо ширину смуги — 100% кадру (від краю до краю)
     max_line = max(len(line) for line in lines)
-    strip_w = W - 40  # майже весь кадр з відступом 20px з кожного боку
-    strip_x = (W - strip_w) // 2
-    
+    strip_w = W  # весь кадр
+    strip_x = 0
+
     # Чорна смуга
     strip_h = len(lines) * line_h + pad_y * 2
-    strip_y = H - strip_h - 8
+    strip_y = H - strip_h
     draw.rectangle([strip_x, strip_y, strip_x + strip_w, strip_y + strip_h], fill=(0, 0, 0))
     
     # Текст
