@@ -69,8 +69,9 @@ ARM_LEN  = int(90  * S)   # = 43
 SHIRT_W  = int(62  * S)   # = 29
 SLEEVE_W = max(8,  int(17 * S))   # = 8
 HIP_W    = int(70 * S)    # = 34 (ширина розташування стегон)
-LEG_W    = max(10, int(24 * S))   # = 17 (товщина ліній ніг)
-LW       = max(4,  int(9  * S))   # = 4
+LEG_W    = max(12, int(26 * S))   # = 17 -> thicker
+LW       = max(7,  int(15 * S))   # = massive outline
+
 
 # ─── Слоти позицій (1280px) ───────────────────────────────────────────────────
 
@@ -102,12 +103,19 @@ async def gen_audio(text, voice, path):
                 f.write(chunk['data'])
 
 def get_duration(path):
+    # Додаємо -show_format, оскільки для MP3 файлів тривалість часто лежить у format, а не у streams
     r = subprocess.run(
-        ['ffprobe', '-v', 'quiet', '-print_format', 'json', '-show_streams', path],
+        ['ffprobe', '-v', 'quiet', '-print_format', 'json', '-show_format', '-show_streams', path],
         capture_output=True, text=True)
-    for s in json.loads(r.stdout).get('streams', []):
-        if 'duration' in s:
-            return float(s['duration'])
+    try:
+        data = json.loads(r.stdout)
+        if 'format' in data and 'duration' in data['format']:
+            return float(data['format']['duration'])
+        for s in data.get('streams', []):
+            if 'duration' in s:
+                return float(s['duration'])
+    except Exception as e:
+        pass
     return 2.0
 
 # ─── Допоміжні ────────────────────────────────────────────────────────────────
@@ -586,195 +594,93 @@ BG = {
 
 def draw_face(draw, fi, cx, facing_right, emotion, talking, facing_camera=False):
     """
-    Чисте обличчя без тіні — Loading Artist стиль.
-    Емоції: normal, talking, surprised, angry, sad
-    facing_camera=True — симетричне обличчя прямо в камеру
+    Loading Artist стиль — великі очі з накладанням, які виступають за обличчя.
+    Немає носу, прості роти.
     """
     is_profile = not facing_camera
     
-    if facing_camera:
-        # Фронтально в камеру — два ока симетрично
-        fs    = 0
-        ey    = HEAD_CY - int(10*S)
-        el_cx = cx - int(28*S)
-        er_cx = cx + int(28*S)
-        er_l  = int(25*S)
-        pr_l  = int(14*S)
-        er_r  = int(25*S)
-        pr_r  = int(14*S)
-    else:
-        # Профіль — ТІЛЬКИ ОДНЕ ОКО (переднє)
-        fs  = int(6*S) if facing_right else -int(6*S)
-        ey  = HEAD_CY - int(10*S)
-
-        # Для профілю: тільки одне око (переднє) — ЗСУНЕНО ВПЕРЕД на 3/4 від центру до краю
-        # Щоб око було виразніше видно в профіль
-        if facing_right:
-            # Дивиться вправо — праве око (переднє) — зміщено на 3/4 до правого краю
-            eye_cx = cx + int(52*S)  # було 28*S + fs//2 ≈ 31*S
-        else:
-            # Дивиться вліво — ліве око (переднє) — зміщено на 3/4 до лівого краю
-            eye_cx = cx - int(52*S)  # було -28*S + fs//2 ≈ -31*S
-
-        er   = int(24*S)  # радіус ока
-        pr   = int(13*S)  # зіниця
-
-    # Surprised — злегка більші очі
-    if emotion == 'surprised' and not facing_camera:
+    er = int(36*S)  # дуже великі очі
+    pr = int(10*S)  # зіниці менші, щоб здавалися більш коміксними
+    ey = HEAD_CY - int(10*S)
+    
+    if emotion == 'surprised':
         er = int(er * 1.2)
         pr = int(pr * 1.2)
-
-    # Малюємо очі
-    if facing_camera:
-        # Два ока для фронтального вигляду
-        for ecx, eradius, pradius in [(el_cx, er_l, pr_l), (er_cx, er_r, pr_r)]:
-            draw.ellipse([ecx-eradius, ey-eradius, ecx+eradius, ey+eradius],
-                         fill=WHITE, outline=STICK_LINE, width=3)
-            draw.ellipse([ecx-pradius//2+1, ey-pradius//2, ecx+pradius//2+1, ey+pradius//2+1],
-                         fill=STICK_LINE)
-            # Відблиск
-            draw.ellipse([ecx-6, ey-int(eradius*0.55), ecx, ey-int(eradius*0.18)], fill=WHITE)
-    else:
-        # Одне око для профілю
-        draw.ellipse([eye_cx-er, ey-er, eye_cx+er, ey+er],
-                     fill=WHITE, outline=STICK_LINE, width=3)
-        draw.ellipse([eye_cx-pr//2+1, ey-pr//2, eye_cx+pr//2+1, ey+pr//2+1],
-                     fill=STICK_LINE)
-        # Відблиск
-        draw.ellipse([eye_cx-6, ey-int(er*0.55), eye_cx, ey-int(er*0.18)], fill=WHITE)
-
-    # ── Брови ──
-    if facing_camera:
-        # Дві брови для фронтального вигляду
-        brow_y_norm = ey - max(er_l, er_r) - 7
         
-        if emotion not in ('angry', 'sad', 'surprised'):
-            by = brow_y_norm
-            draw.line([(el_cx-er_l+2, by+3), (el_cx+er_l-2, by+3)], fill=STICK_LINE, width=5)
-            draw.line([(er_cx-er_r+2, by+3), (er_cx+er_r-2, by+3)], fill=STICK_LINE, width=5)
-        elif emotion == 'angry':
-            by = ey - max(er_l, er_r) - 4
-            draw.line([(el_cx-er_l+2, by+2), (el_cx+er_l-2, by+10)], fill=STICK_LINE, width=6)
-            draw.line([(er_cx-er_r+2, by+10), (er_cx+er_r-2, by+2)], fill=STICK_LINE, width=6)
-        elif emotion == 'sad':
-            by = brow_y_norm
-            draw.line([(el_cx-er_l+2, by+10), (el_cx+er_l-2, by+2)], fill=STICK_LINE, width=6)
-            draw.line([(er_cx-er_r+2, by+2), (er_cx+er_r-2, by+10)], fill=STICK_LINE, width=6)
-        elif emotion == 'surprised':
-            by = ey - max(er_l, er_r) - 20
-            draw.arc([el_cx-er_l+2, by-8, el_cx+er_l-2, by+10], 195, 345, fill=STICK_LINE, width=6)
-            draw.arc([er_cx-er_r+2, by-8, er_cx+er_r-2, by+10], 195, 345, fill=STICK_LINE, width=6)
-        else:
-            by = brow_y_norm
-            draw.line([(el_cx-er_l+2, by+5), (el_cx+er_l-2, by)], fill=STICK_LINE, width=5)
-            draw.line([(er_cx-er_r+2, by), (er_cx+er_r-2, by+5)], fill=STICK_LINE, width=5)
-    else:
-        # Одна брова для профілю
-        brow_y = ey - er - 8
+    def draw_eye(ecx, e_color=WHITE):
+        draw.ellipse([ecx-er, ey-er, ecx+er, ey+er], fill=e_color, outline=STICK_LINE, width=LW)
+        # Зіниця (дивиться трохи вперед)
+        px_off = int(6*S) if facing_right and not facing_camera else (0 if facing_camera else -int(6*S))
+        draw.ellipse([ecx+px_off-pr, ey-pr, ecx+px_off+pr, ey+pr], fill=STICK_LINE)
         
-        if emotion == 'angry':
-            draw.line([(eye_cx-er+4, brow_y+2), (eye_cx+er-4, brow_y+8)], fill=STICK_LINE, width=6)
-        elif emotion == 'sad':
-            draw.line([(eye_cx-er+4, brow_y+8), (eye_cx+er-4, brow_y+2)], fill=STICK_LINE, width=6)
-        elif emotion == 'surprised':
-            draw.arc([eye_cx-er+2, brow_y-10, eye_cx+er-2, brow_y+6], 195, 345, fill=STICK_LINE, width=6)
-        else:
-            draw.line([(eye_cx-er+4, brow_y+4), (eye_cx+er-4, brow_y)], fill=STICK_LINE, width=5)
-
-    # ── Ніс ──
     if facing_camera:
-        # Ніс по центру для фронтального
-        nx = cx + fs//2
-        draw.ellipse([nx-3, HEAD_CY+int(12*S), nx+3, HEAD_CY+int(20*S)],
-                     fill=(188,148,128))
+        # Два ока (фронтально накладаються)
+        el_cx = cx - int(24*S)
+        er_cx = cx + int(24*S)
+        draw_eye(el_cx)
+        draw_eye(er_cx)
     else:
-        # Ніс профілем — трикутник на САМОМУ краю голови (виступає вперед)
-        nose_x = cx + (int(58*S) if facing_right else -int(58*S))  # було 38*S
-        nose_y = HEAD_CY + int(18*S)
-        nose_tip = cx + (int(78*S) if facing_right else -int(78*S))  # вістря носа ще далі
-        if facing_right:
-            draw.polygon([
-                (nose_x - int(8*S), HEAD_CY + int(10*S)),  # основа носа
-                (nose_tip, nose_y),                         # вістря носа
-                (nose_x - int(8*S), HEAD_CY + int(26*S)),  # основа носа знизу
-            ], fill=(188,148,128), outline=STICK_LINE, width=2)
-        else:
-            draw.polygon([
-                (nose_x + int(8*S), HEAD_CY + int(10*S)),  # основа носа
-                (nose_tip, nose_y),                         # вістря носа
-                (nose_x + int(8*S), HEAD_CY + int(26*S)),  # основа носа знизу
-            ], fill=(188,148,128), outline=STICK_LINE, width=2)
-
-    # ── Рот ──
-    my = HEAD_CY + int(44*S)
+        # Два ока в профіль, обидва випирають з обличчя вперед!
+        dir_mult = 1 if facing_right else -1
+        far_eye_cx = cx + dir_mult * int(38*S)
+        near_eye_cx = cx + dir_mult * int(58*S)
+        # Спочатку малюємо дальнє око
+        draw_eye(far_eye_cx)
+        # Потім ближнє око (накладається зверху)
+        draw_eye(near_eye_cx)
     
-    if facing_camera:
-        mx_off = fs//2
+    # ── Рот (D-форма) ──
+    my = HEAD_CY + int(42*S)
+    mx_off = 0 if facing_camera else (int(35*S) if facing_right else -int(35*S))
+    
+    if emotion == 'surprised' or (talking and (fi//4) % 2 == 0):
+        # D-рот
+        mw = int(15*S)
+        mh = int(22*S)
+        rx1, ry1 = cx - mw + mx_off, my - mh//2
+        rx2, ry2 = cx + mw + mx_off, my + mh//2
+        draw.chord([rx1, ry1, rx2, ry2], 0, 180, fill=STICK_LINE, outline=STICK_LINE, width=LW)
+        draw.chord([rx1+LW, ry1+LW, rx2-LW, ry2-LW], 0, 180, fill=(220, 80, 80)) # язик
+    elif emotion == 'angry' or emotion == 'sad':
+        # Перевернута лінія
+        draw.arc([cx-int(12*S)+mx_off, my-int(6*S), cx+int(12*S)+mx_off, my+int(10*S)], 180, 360, fill=STICK_LINE, width=LW)
     else:
-        # Для профілю: рот зміщений до носу (на 1/3 від центру до краю)
-        mouth_offset = int(20*S)
-        mx_off = mouth_offset if facing_right else -mouth_offset
+        # Дуга (посмишка)
+        draw.arc([cx-int(12*S)+mx_off, my-int(8*S), cx+int(12*S)+mx_off, my+int(12*S)], 0, 180, fill=STICK_LINE, width=LW)
 
-    if emotion == 'surprised':
-        # О-рот
-        draw.ellipse([cx-int(9*S)+mx_off, my-int(12*S),
-                      cx+int(13*S)+mx_off, my+int(13*S)],
-                     fill=(178,28,28), outline=STICK_LINE, width=2)
+# ─── Хвіст Поліни (Loading Artist стиль) ───────────────────────────────────────
 
-    elif emotion == 'angry':
-        # Зціплені зуби
-        mx1 = cx - int(20*S) + mx_off
-        mx2 = cx + int(24*S) + mx_off
-        my1, my2 = my-int(5*S), my+int(10*S)
-        draw.rectangle([mx1, my1, mx2, my2], fill=(178,28,28))
-        draw.line([(mx1, my1+5), (mx2, my1+5)], fill=WHITE, width=3)
-        draw.rectangle([mx1, my1, mx2, my2], outline=STICK_LINE, width=3)
+def draw_ponytail(draw, cx, facing_right, draw_base=False):
+    HAIR_COL = (255, 225, 40)
+    # Зміщуємо шапочку волосся так само, як малюється голова
+    is_profile = getattr(draw, '_current_is_profile', False)
+    head_cx = cx + (int(6*S)//2 if facing_right else -int(6*S)//2) if is_profile else cx
+    
+    # Якщо draw_base, малюємо передню "шапочку" волосся під очима
+    if draw_base:
+        hw = int(HEAD_RX * 0.7) + int(4*S) if is_profile else HEAD_RX + int(4*S)
+        hh = HEAD_RY + int(4*S)
+        draw.chord([head_cx-hw, HEAD_CY-hh, head_cx+hw, HEAD_CY+hh], 170, 370, fill=HAIR_COL, outline=STICK_LINE, width=LW)
+        return
 
-    elif emotion == 'sad':
-        # Перевернута дуга — без сліз
-        draw.arc([cx-int(20*S)+mx_off, my-int(4*S),
-                  cx+int(28*S)+mx_off, my+int(18*S)],
-                 180, 360, fill=STICK_LINE, width=5)
-
-    elif emotion in ('talking', 'normal') and talking and (fi//4) % 2 == 0:
-        # Анімований рот
-        draw.ellipse([cx-int(24*S)+mx_off, my-int(14*S),
-                      cx+int(28*S)+mx_off, my+int(18*S)], fill=(178,28,28))
-        draw.rectangle([cx-int(16*S)+mx_off, my-int(12*S),
-                        cx+int(20*S)+mx_off, my-2], fill=WHITE)
-
-    else:
-        # Звичайна усмішка
-        draw.arc([cx-int(20*S)+mx_off, my-int(10*S),
-                  cx+int(28*S)+mx_off, my+int(18*S)],
-                 0, 180, fill=STICK_LINE, width=5)
-
-# ─── Хвіст Поліни ─────────────────────────────────────────────────────────────
-
-def draw_ponytail(draw, cx, facing_right):
-    HAIR_COL  = (198, 88, 28)
-    HAIR_DARK = (150, 55, 10)
-    side      = -1 if facing_right else 1
-    tx        = cx + side * (HEAD_RX - 5)
-    ty        = HEAD_CY - HEAD_RY + int(14*S)
-    thick     = int(15*S)
-    n         = 14
-    pts       = []
-    for i in range(n+1):
-        f  = i / n
-        px = tx + side * int(f * 22*S)
-        py = ty + int((f**0.75) * 140*S)
-        pts.append((px, py))
-    for i in range(len(pts)-1):
-        w = max(4, int(thick * (1 - i/n*0.5)))
-        _seg(draw, *pts[i], *pts[i+1], HAIR_COL, w)
-    # Темна обводка
-    for i in range(len(pts)-1):
-        w = max(2, int(thick*(1-i/n*0.5))-5)
-        if w > 1:
-            _seg(draw, *pts[i], *pts[i+1], HAIR_DARK, w)
-    gx, gy = pts[n//2]
-    draw.ellipse([gx-6, gy-6, gx+6, gy+6], fill=(215,45,45))
+    # Задній хвіст
+    side = -1 if facing_right else 1
+    root_x = head_cx + side * (HEAD_RX - 15)
+    root_y = HEAD_CY - 5
+    end_x = root_x + side * int(45*S)
+    end_y = root_y + int(110*S)
+    ctrl_x = root_x + side * int(80*S)
+    
+    pts = [
+        (root_x, root_y - 15),
+        (ctrl_x, root_y + 30),
+        (end_x, end_y),
+        (ctrl_x - side*30, root_y + 40),
+        (root_x, root_y + 15)
+    ]
+    draw.polygon(pts, fill=HAIR_COL, outline=STICK_LINE, width=LW)
+    # Гумка
+    draw.ellipse([root_x-8, root_y-15, root_x+10, root_y+15], fill=(240, 50, 150), outline=STICK_LINE, width=LW)
 
 def draw_fingers(draw, x, y, facing_right, color):
     """Малює кілька тоненьких ліній від кисті (пальців) без 'шаріків'."""
@@ -900,38 +806,44 @@ def draw_char(draw, fi, cx, char_id, walking=False, direction=0, talking=False, 
         # У фронтальному вигляді ми просто малюємо обидві руки ПІСЛЯ куртки
         pass
 
-    # ── Куртка ──
-    v_d  = NECK_Y + int(70*S)
-    lw_s = int(34*S)  # ширина лацкану
+    # ── Тіло (Loading Artist стиль - трапеція) ──
+    # Polina (char_id == 1) має рожеве плаття-трапецію
+    # Хлопці (char_id == 0, 2) мають відкриту куртку
     
-    if is_profile:
-        # Профіль — вужче тіло (еліпс)
-        draw.rounded_rectangle([cx-jacket_w, NECK_Y+4, cx+jacket_w, HIP_Y+8],
-                                radius=int(18*S), fill=jcol, outline=STICK_LINE, width=3)
-        # Краватка видно збоку
-        tx_t = cx + fs//2
-        draw.polygon([
-            (tx_t-3,v_d-2),(tx_t+3,v_d-2),
-            (tx_t+4,v_d+int(36*S)),(tx_t,v_d+int(52*S)),(tx_t-4,v_d+int(36*S))
-        ], fill=tcol, outline=STICK_LINE, width=2)
-    else:
-        # Фронтально — широке тіло
-        draw.rounded_rectangle([cx-hip_w, NECK_Y+4, cx+hip_w, HIP_Y+8],
-                                radius=int(18*S), fill=jcol, outline=STICK_LINE, width=3)
-        draw.polygon([(cx-int(18*S),NECK_Y+4),(cx+int(18*S),NECK_Y+4),(cx+fs//2,v_d)], fill=WHITE)
-        draw.polygon([(cx-int(18*S),NECK_Y+4),(cx-lw_s,NECK_Y+int(26*S)),
-                      (cx-int(16*S),v_d-7),(cx+fs//2,v_d)],
-                     fill=jcol, outline=STICK_LINE, width=2)
-        draw.polygon([(cx+int(18*S),NECK_Y+4),(cx+lw_s,NECK_Y+int(26*S)),
-                      (cx+int(16*S),v_d-7),(cx+fs//2,v_d)],
-                     fill=jcol, outline=STICK_LINE, width=2)
-        draw.line([(cx-int(18*S),NECK_Y+4),(cx+fs//2,v_d)], fill=STICK_LINE, width=2)
-        draw.line([(cx+int(18*S),NECK_Y+4),(cx+fs//2,v_d)], fill=STICK_LINE, width=2)
-        tx_t = cx + fs//3
-        draw.polygon([
-            (tx_t-4,v_d-2),(tx_t+4,v_d-2),
-            (tx_t+6,v_d+int(36*S)),(tx_t,v_d+int(52*S)),(tx_t-6,v_d+int(36*S))
-        ], fill=tcol, outline=STICK_LINE, width=2)
+    top_w = jacket_w if is_profile else int(hip_w * 0.8)
+    bot_w = int(jacket_w * 1.6) if is_profile else int(hip_w * 1.5)
+    
+    # Зміщуємо тіло в профіль трохи назад для балансу
+    b_cx = cx - (int(8*S) if facing_right else -int(8*S)) if is_profile else cx
+    
+    body_pts = [
+        (b_cx - top_w, NECK_Y),
+        (b_cx + top_w, NECK_Y),
+        (b_cx + bot_w, HIP_Y + 10),
+        (b_cx - bot_w, HIP_Y + 10)
+    ]
+    
+    # Основна заливка (сукня або куртка)
+    draw.polygon(body_pts, fill=jcol, outline=STICK_LINE, width=LW)
+    
+    # Деталі одягу (футболка всередині для хлопців)
+    if char_id != 1:
+        if is_profile:
+            stripe_w = int(18*S)
+            sx = b_cx + (int(4*S) if facing_right else -int(18*S) - int(4*S))
+            # Біла лінія футболки
+            draw.polygon([
+                (sx, NECK_Y + LW//2 + 2), (sx + stripe_w, NECK_Y + LW//2 + 2),
+                (sx + stripe_w*(1 if facing_right else -1), HIP_Y + 9),
+                (sx + int(8*S)*(1 if facing_right else -1), HIP_Y + 9)
+            ], fill=WHITE, outline=STICK_LINE, width=max(2, int(LW*0.6)))
+        else:
+            sw_top = int(18*S)
+            sw_bot = int(24*S)
+            draw.polygon([
+                (cx-sw_top, NECK_Y), (cx+sw_top, NECK_Y),
+                (cx+sw_bot, HIP_Y+10), (cx-sw_bot, HIP_Y+10)
+            ], fill=WHITE, outline=STICK_LINE, width=max(2, int(LW*0.6)))
 
     # ── Передня рука (Ближня) малюється ПІСЛЯ куртки ──
     if is_profile:
@@ -1103,23 +1015,24 @@ def draw_char(draw, fi, cx, char_id, walking=False, direction=0, talking=False, 
             draw_foot(draw, lknee, lfoot, STICK_LINE, shoe, True)
             draw_foot(draw, rknee, rfoot, STICK_LINE, shoe, True)
 
-    # ── Голова — профіль або фронтально ──
+    # ── Голова і Базове волосся ──
+    draw._current_is_profile = is_profile
+    
     if is_profile:
-        # Профіль — овал повернутий на 90° (як у South Park)
-        head_w = int(HEAD_RX * 0.7)  # вужча голова збоку
+        # Профіль — голова більш кругла
+        head_w = int(HEAD_RX * 0.9)  # майже коло
         head_h = HEAD_RY
-        # Зміщуємо голову трохи вперед по напрямку
         head_cx = cx + fs//2
-
-        # Малюємо голову овалом
         draw.ellipse([head_cx-head_w, HEAD_CY-head_h, head_cx+head_w, HEAD_CY+head_h],
                      fill=WHITE, outline=STICK_LINE, width=LW)
-        # Ніс малюється в draw_face()
     else:
-        # Фронтально — кругла голова
+        # Фронтально — широкий овал
         draw.ellipse([cx-HEAD_RX, HEAD_CY-HEAD_RY, cx+HEAD_RX, HEAD_CY+HEAD_RY],
                      fill=WHITE, outline=STICK_LINE, width=LW)
-        # Ніс малюється в draw_face()
+
+    # База волосся (Поліна) малюється ДО очей, щоб очі накладались зверху
+    if hair == 'ponytail':
+        draw_ponytail(draw, cx, facing_right, draw_base=True)
 
     # ── Обличчя ──
     draw_face(draw, fi, cx, facing_right, emotion, talking, facing_camera=facing_camera)
