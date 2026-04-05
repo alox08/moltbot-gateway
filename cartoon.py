@@ -824,51 +824,65 @@ def draw_char(draw, fi, cx, char_id, walking=False, direction=0, talking=False, 
         draw_ponytail(draw, cx, facing_right)
 
     # Функція розрахунку точок руки (плече, контрольна ліктя, кисть)
-    def calc_arm(sw, is_far_arm=False):
-        AL = int(ARM_LEN * 1.35)
-        x_sh = cx + int((hip_w * 0.5 * 0.3) * sw) if is_profile else cx + int(SHIRT_W * 0.8 * sw)
+    def calc_arm(is_far_arm=False, side_frontal=1):
+        AL = int(ARM_LEN * 1.25)  # Трохи зменшив видовження
+        
+        if is_profile:
+            dir_x = front_sw
+            # Зміщуємо плече ближче до центру тіла
+            x_sh = cx + int(jacket_w * 0.15 * front_sw)
+        else:
+            dir_x = side_frontal
+            x_sh = cx + int(SHIRT_W * 0.8 * side_frontal)
+            
         y_sh = arm_y
 
-        # Фаза для цієї руки. Дальня рука рухається в протифазі до ближньої
+        # Фаза для цієї руки. Дальня рука рухається в протифазі
         cur_phase = -arm_phase if is_far_arm else arm_phase
         
         if emotion == 'surprised':
-            x_el = int(x_sh + sw * AL * 0.3)
+            x_el = int(x_sh + dir_x * AL * 0.3)
             y_el = int(y_sh - AL * 0.4)
-            x_h  = int(x_sh + sw * AL * 0.3)
+            x_h  = int(x_sh + dir_x * AL * 0.3)
             y_h  = int(y_sh - AL * 1.0)
         elif emotion == 'angry':
-            x_el = int(x_sh + sw * AL * 0.5)
+            x_el = int(x_sh + dir_x * AL * 0.5)
             y_el = int(y_sh + AL * 0.1)
-            x_h  = int(x_sh + sw * AL * 1.0)
+            x_h  = int(x_sh + dir_x * AL * 1.0)
             y_h  = int(y_sh - AL * 0.1)
         elif gesture == 'explain' and not is_far_arm:
-            x_el = int(x_sh + sw * AL * 0.4)
+            x_el = int(x_sh + dir_x * AL * 0.4)
             y_el = int(y_sh - AL * 0.1)
-            x_h  = int(x_sh + sw * AL * 0.7)
+            x_h  = int(x_sh + dir_x * AL * 0.7)
             y_h  = int(y_sh - AL * 0.7)
         else:
             if is_profile:
-                swing_f = cur_phase * 0.8
-                shoulder_angle = swing_f * 0.7
-                elbow_bend = 0.1 if swing_f <= 0 else 0.1 + swing_f * 1.1
+                # ЗМЕНШЕНИЙ РОЗМАХ (0.5 замість 0.8) для спокійнішої ходьби
+                swing_f = cur_phase * 0.5
+                shoulder_angle = swing_f * 0.6
+                
+                # Менший ліктьовий згин для плавності
+                elbow_bend = 0.05 if swing_f <= 0 else 0.05 + swing_f * 0.8
                 elbow_angle = shoulder_angle + elbow_bend
             else:
-                swing_f = cur_phase * 0.4 * sw
+                swing_f = cur_phase * 0.3 * side_frontal
                 shoulder_angle = swing_f * 0.5
-                elbow_bend = 0.1 if swing_f <= 0 else 0.1 + swing_f * 0.5
-                elbow_angle = shoulder_angle + elbow_bend * sw
+                elbow_bend = 0.1 if swing_f <= 0 else 0.1 + swing_f * 0.4
+                elbow_angle = shoulder_angle + elbow_bend * dir_x
 
             U = AL * 0.5
             L = AL * 0.5
-            x_el = int(x_sh + math.sin(shoulder_angle) * sw * U)
+            x_el = int(x_sh + math.sin(shoulder_angle) * dir_x * U)
             y_el = int(y_sh + math.cos(shoulder_angle) * U)
+            
             if not is_profile:
-                x_el += int(0.2 * sw * U)
-            x_h = int(x_el + math.sin(elbow_angle) * sw * L)
+                x_el += int(0.15 * dir_x * U)
+                
+            x_h = int(x_el + math.sin(elbow_angle) * dir_x * L)
             y_h = int(y_el + math.cos(elbow_angle) * L)
+            
             if not is_profile:
-                x_h += int(0.2 * sw * L)
+                x_h += int(0.15 * dir_x * L)
 
         return x_sh, y_sh, x_el, y_el, x_h, y_h
 
@@ -876,12 +890,11 @@ def draw_char(draw, fi, cx, char_id, walking=False, direction=0, talking=False, 
     front_sw = 1 if facing_right else -1
 
     if is_profile:
-        far_sw = -front_sw
-        x_sh, y_sh, x_el, y_el, x_h, y_h = calc_arm(far_sw, is_far_arm=True)
-        # Гладка лінія з двох сегментів (плече-лікоть, лікоть-кисть) — `_limb` малює круглі суглоби!
+        x_sh, y_sh, x_el, y_el, x_h, y_h = calc_arm(is_far_arm=True)
+        # Гладка лінія з двох сегментів (плече-лікоть, лікоть-кисть)
         col = (45, 45, 45) # трохи темніша рука
         _limb(draw, [(x_sh, y_sh), (x_el, y_el), (x_h, y_h)], col, SLEEVE_W)
-        draw_fingers(draw, x_h, y_h, far_sw > 0, col)
+        draw_fingers(draw, x_h, y_h, front_sw > 0, col)
     else:
         # У фронтальному вигляді ми просто малюємо обидві руки ПІСЛЯ куртки
         pass
@@ -922,14 +935,14 @@ def draw_char(draw, fi, cx, char_id, walking=False, direction=0, talking=False, 
 
     # ── Передня рука (Ближня) малюється ПІСЛЯ куртки ──
     if is_profile:
-        x_sh, y_sh, x_el, y_el, x_h, y_h = calc_arm(front_sw, is_far_arm=False)
+        x_sh, y_sh, x_el, y_el, x_h, y_h = calc_arm(is_far_arm=False)
         # Передня рука (колір STICK_LINE)
         _limb(draw, [(x_sh, y_sh), (x_el, y_el), (x_h, y_h)], STICK_LINE, SLEEVE_W)
         draw_fingers(draw, x_h, y_h, front_sw > 0, STICK_LINE)
     else:
         # Фронтально — дві руки
         for side in (-1, 1):
-            x_sh, y_sh, x_el, y_el, x_h, y_h = calc_arm(side, is_far_arm=False)
+            x_sh, y_sh, x_el, y_el, x_h, y_h = calc_arm(is_far_arm=False, side_frontal=side)
             _limb(draw, [(x_sh, y_sh), (x_el, y_el), (x_h, y_h)], STICK_LINE, SLEEVE_W)
             draw_fingers(draw, x_h, y_h, side > 0, STICK_LINE)
 
