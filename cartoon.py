@@ -776,26 +776,12 @@ def draw_ponytail(draw, cx, facing_right):
     gx, gy = pts[n//2]
     draw.ellipse([gx-6, gy-6, gx+6, gy+6], fill=(215,45,45))
 
-def _bezier_curve(p0, p1, p2, steps=6):
-    """Генерує точки квадратичної кривої Безьє (плавний згин/нудл-рука)."""
-    pts = []
-    for i in range(steps + 1):
-        t = i / steps
-        x = (1-t)**2 * p0[0] + 2*(1-t)*t * p1[0] + t**2 * p2[0]
-        y = (1-t)**2 * p0[1] + 2*(1-t)*t * p1[1] + t**2 * p2[1]
-        pts.append((int(x), int(y)))
-    return pts
-
-def draw_fist(draw, x, y, facing_right):
-    """Малює невеличкий кулак з пальцями на кінці руки."""
-    # Основа кулака
-    fr = max(3, int(8*S))  # радіус
-    draw.ellipse([x-fr, y-fr, x+fr, y+fr], fill=WHITE, outline=STICK_LINE, width=2)
-    # Пальці (3 лінії)
+def draw_fingers(draw, x, y, facing_right, color):
+    """Малює кілька тоненьких ліній від кисті (пальців) без 'шаріків'."""
     dir_x = 1 if facing_right else -1
-    for i in range(-1, 2):
+    for i in [-1, 1]:  # два маленькі пальчики
         fy = y + i * int(3*S)
-        draw.line([(x + dir_x*fr*0.5, fy), (x + dir_x*fr*1.2, fy)], fill=STICK_LINE, width=1)
+        draw.line([(x, y), (x + dir_x*int(7*S), fy)], fill=color, width=max(1, int(2*S)))
 
 # ─── Персонаж — South Park стиль (ходьба боком) ──────────────────────────────
 
@@ -884,20 +870,18 @@ def draw_char(draw, fi, cx, char_id, walking=False, direction=0, talking=False, 
             if not is_profile:
                 x_h += int(0.2 * sw * L)
 
-        # Контрольна точка Безьє для гладкого ліктя
-        x_cp = x_el * 2 - (x_sh + x_h) / 2
-        y_cp = y_el * 2 - (y_sh + y_h) / 2
-        return x_sh, y_sh, x_cp, y_cp, x_h, y_h
+        return x_sh, y_sh, x_el, y_el, x_h, y_h
 
     # ── Задня рука (Дальня) малюється ДО куртки ──
     front_sw = 1 if facing_right else -1
 
     if is_profile:
         far_sw = -front_sw
-        x_sh, y_sh, x_cp, y_cp, x_h, y_h = calc_arm(far_sw, is_far_arm=True)
-        pts = _bezier_curve((x_sh, y_sh), (x_cp, y_cp), (x_h, y_h))
-        _limb(draw, pts, (25, 25, 25), SLEEVE_W)  # трохи темніша
-        draw_fist(draw, x_h, y_h, far_sw > 0)
+        x_sh, y_sh, x_el, y_el, x_h, y_h = calc_arm(far_sw, is_far_arm=True)
+        # Гладка лінія з двох сегментів (плече-лікоть, лікоть-кисть) — `_limb` малює круглі суглоби!
+        col = (45, 45, 45) # трохи темніша рука
+        _limb(draw, [(x_sh, y_sh), (x_el, y_el), (x_h, y_h)], col, SLEEVE_W)
+        draw_fingers(draw, x_h, y_h, far_sw > 0, col)
     else:
         # У фронтальному вигляді ми просто малюємо обидві руки ПІСЛЯ куртки
         pass
@@ -938,17 +922,16 @@ def draw_char(draw, fi, cx, char_id, walking=False, direction=0, talking=False, 
 
     # ── Передня рука (Ближня) малюється ПІСЛЯ куртки ──
     if is_profile:
-        x_sh, y_sh, x_cp, y_cp, x_h, y_h = calc_arm(front_sw, is_far_arm=False)
-        pts = _bezier_curve((x_sh, y_sh), (x_cp, y_cp), (x_h, y_h))
-        _limb(draw, pts, STICK_LINE, SLEEVE_W)
-        draw_fist(draw, x_h, y_h, front_sw > 0)
+        x_sh, y_sh, x_el, y_el, x_h, y_h = calc_arm(front_sw, is_far_arm=False)
+        # Передня рука (колір STICK_LINE)
+        _limb(draw, [(x_sh, y_sh), (x_el, y_el), (x_h, y_h)], STICK_LINE, SLEEVE_W)
+        draw_fingers(draw, x_h, y_h, front_sw > 0, STICK_LINE)
     else:
         # Фронтально — дві руки
         for side in (-1, 1):
-            x_sh, y_sh, x_cp, y_cp, x_h, y_h = calc_arm(side, is_far_arm=False)
-            pts = _bezier_curve((x_sh, y_sh), (x_cp, y_cp), (x_h, y_h))
-            _limb(draw, pts, STICK_LINE, SLEEVE_W)
-            draw_fist(draw, x_h, y_h, side > 0)
+            x_sh, y_sh, x_el, y_el, x_h, y_h = calc_arm(side, is_far_arm=False)
+            _limb(draw, [(x_sh, y_sh), (x_el, y_el), (x_h, y_h)], STICK_LINE, SLEEVE_W)
+            draw_fingers(draw, x_h, y_h, side > 0, STICK_LINE)
 
     # ── Ноги — ПРАВИЛЬНИЙ walk cycle (4 ключові пози) ──
     if walking:
