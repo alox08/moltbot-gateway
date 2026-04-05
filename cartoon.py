@@ -60,8 +60,8 @@ CHAR_CFG = [
 #
 
 GROUND_Y = 560
-HEAD_RX  = int(98  * S)   # = 47
-HEAD_RY  = int(84  * S)   # = 40
+HEAD_RX  = int(80  * S)   # Менша ширина (коміксна витягнутість)
+HEAD_RY  = int(105 * S)   # Більша висота (вертикальний овал)
 HEAD_CY  = GROUND_Y - int(420 * S)   # = 560-201 = 359
 NECK_Y   = HEAD_CY + HEAD_RY + 4     # = 403
 HIP_Y    = NECK_Y  + int(165 * S)    # = 482
@@ -594,54 +594,58 @@ BG = {
 
 def draw_face(draw, fi, cx, facing_right, emotion, talking, facing_camera=False):
     """
-    Класичні об'єднані коміксні очі (як одна ціла маска) з красивим накладанням.
+    Класичні об'єднані коміксні очі (вертикально витягнуті овали).
     Рот розташовується безпосередньо під очима.
     """
     is_profile = not facing_camera
     
-    er = int(24*S)  # Оптимальний коміксний розмір
-    pr = int(8*S)   # Зіниці
-    ey = HEAD_CY - int(12*S)
+    erx = int(18*S)  # Ширина ока
+    ery = int(32*S)  # Висота ока (витягнуте!)
+    pr_x = int(6*S)  # Зіниця (ширина)
+    pr_y = int(10*S) # Зіниця (висота)
+    ey = HEAD_CY - int(10*S)
     
     if emotion == 'surprised':
-        er = int(er * 1.2)
-        pr = int(pr * 1.2)
+        erx = int(erx * 1.2)
+        ery = int(ery * 1.2)
+        pr_x = int(pr_x * 1.2)
+        pr_y = int(pr_y * 1.2)
         
     if facing_camera:
-        el_cx = cx - int(14*S)
-        er_cx = cx + int(14*S)
+        el_cx = cx - int(13*S)
+        er_cx = cx + int(13*S)
         
-        # 1. Чорні дуги навколо (овали з контуром)
-        draw.ellipse([el_cx-er, ey-er, el_cx+er, ey+er], fill=WHITE, outline=STICK_LINE, width=LW)
-        draw.ellipse([er_cx-er, ey-er, er_cx+er, ey+er], fill=WHITE, outline=STICK_LINE, width=LW)
+        # 1. Чорні дуги навколо
+        draw.ellipse([el_cx-erx, ey-ery, el_cx+erx, ey+ery], fill=WHITE, outline=STICK_LINE, width=LW)
+        draw.ellipse([er_cx-erx, ey-ery, er_cx+erx, ey+ery], fill=WHITE, outline=STICK_LINE, width=LW)
         # 2. Центр замальовуємо білим, щоб очі з'єднались в єдине ціле
-        draw.rectangle([cx-er//2, ey-er+LW+1, cx+er//2, ey+er-LW-1], fill=WHITE)
+        draw.rectangle([cx-erx//2, ey-ery+LW+1, cx+erx//2, ey+ery-LW-1], fill=WHITE)
         
         # Зіниці
-        px_off = int(6*S) if facing_right else -int(6*S)
-        draw.ellipse([el_cx+px_off-pr, ey-pr, el_cx+px_off+pr, ey+pr], fill=STICK_LINE)
-        draw.ellipse([er_cx+px_off-pr, ey-pr, er_cx+px_off+pr, ey+pr], fill=STICK_LINE)
+        px_off = int(4*S) if facing_right else -int(4*S)
+        draw.ellipse([el_cx+px_off-pr_x, ey-pr_y, el_cx+px_off+pr_x, ey+pr_y], fill=STICK_LINE)
+        draw.ellipse([er_cx+px_off-pr_x, ey-pr_y, er_cx+px_off+pr_x, ey+pr_y], fill=STICK_LINE)
     else:
         # Профіль: очі висунуті і зліплені
         dir_mult = 1 if facing_right else -1
-        near_eye_cx = cx + dir_mult * int(HEAD_RX * 0.65)
-        far_eye_cx = near_eye_cx + dir_mult * int(18*S)
+        near_eye_cx = cx + dir_mult * int(HEAD_RX * 0.7)
+        far_eye_cx = near_eye_cx + dir_mult * int(14*S)
         
         # Малюємо дальнє, потім ближнє
-        draw.ellipse([far_eye_cx-er, ey-er, far_eye_cx+er, ey+er], fill=WHITE, outline=STICK_LINE, width=LW)
-        draw.ellipse([near_eye_cx-er, ey-er, near_eye_cx+er, ey+er], fill=WHITE, outline=STICK_LINE, width=LW)
+        draw.ellipse([far_eye_cx-erx, ey-ery, far_eye_cx+erx, ey+ery], fill=WHITE, outline=STICK_LINE, width=LW)
+        draw.ellipse([near_eye_cx-erx, ey-ery, near_eye_cx+erx, ey+ery], fill=WHITE, outline=STICK_LINE, width=LW)
         # Об'єднуємо
         overlap_x1 = min(near_eye_cx, far_eye_cx)
         overlap_x2 = max(near_eye_cx, far_eye_cx)
-        draw.rectangle([overlap_x1, ey-er+LW+1, overlap_x2, ey+er-LW-1], fill=WHITE)
+        draw.rectangle([overlap_x1, ey-ery+LW+1, overlap_x2, ey+ery-LW-1], fill=WHITE)
         
         # Зіниці
-        px_off = int(6*S) * dir_mult
-        draw.ellipse([far_eye_cx+px_off-pr, ey-pr, far_eye_cx+px_off+pr, ey+pr], fill=STICK_LINE)
-        draw.ellipse([near_eye_cx+px_off-pr, ey-pr, near_eye_cx+px_off+pr, ey+pr], fill=STICK_LINE)
+        px_off = int(5*S) * dir_mult
+        draw.ellipse([far_eye_cx+px_off-pr_x, ey-pr_y, far_eye_cx+px_off+pr_x, ey+pr_y], fill=STICK_LINE)
+        draw.ellipse([near_eye_cx+px_off-pr_x, ey-pr_y, near_eye_cx+px_off+pr_x, ey+pr_y], fill=STICK_LINE)
     
     # ── Рот (кумедний, високо біля очей) ──
-    my = ey + er + int(10*S)
+    my = ey + ery + int(8*S)
     mx_off = 0 if facing_camera else int(HEAD_RX * 0.65) * (1 if facing_right else -1)
     
     if emotion == 'surprised' or (talking and (fi//4) % 2 == 0):
