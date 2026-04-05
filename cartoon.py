@@ -816,81 +816,6 @@ def draw_char(draw, fi, cx, char_id, walking=False, direction=0, talking=False, 
     if hair == 'ponytail':
         draw_ponytail(draw, cx, facing_right)
 
-    # ── Руки ──
-    # Для профілю: малюємо тільки одну руку (передню)
-    front_sw = 1 if facing_right else -1  # сторона "вперед" відносно напрямку
-    AL = ARM_LEN  # довжина руки
-
-    if is_profile:
-        # Профіль — одна рука (передня)
-        sw   = front_sw
-        # Плечо: злегка виступає в бік напрямку руху + трохи нижче arm_y
-        x_sh = cx + int(SHIRT_W * 0.55 * sw)
-        y_sh = arm_y
-
-        if emotion == 'surprised':
-            # Руки вгору
-            x_el = int(x_sh + sw * AL * 0.3)
-            y_el = int(y_sh - AL * 0.4)
-            x_h  = int(x_sh + sw * AL * 0.3)
-            y_h  = int(y_sh - AL * 1.0)
-        elif emotion == 'angry':
-            # Рука вперед
-            x_el = int(x_sh + sw * AL * 0.5)
-            y_el = int(y_sh + AL * 0.1)
-            x_h  = int(x_sh + sw * AL * 1.0)
-            y_h  = int(y_sh - AL * 0.1)
-        elif gesture == 'explain':
-            # Рука вперед під кутом
-            x_el = int(x_sh + sw * AL * 0.4)
-            y_el = int(y_sh - AL * 0.1)
-            x_h  = int(x_sh + sw * AL * 0.7)
-            y_h  = int(y_sh - AL * 0.7)
-        else:
-            # Ходьба або спокій: дуговий рух від плеча
-            # arm_phase: -1=рука ззаду, +1=рука спереду
-            swing_angle = arm_phase * 0.55  # рад, ~31° максимум
-            # Рука: від плеча по дузі (вниз і вперед/назад)
-            x_el = int(x_sh + math.sin(swing_angle) * sw * AL * 0.5)
-            y_el = int(y_sh + math.cos(swing_angle) * AL * 0.5)
-            x_h  = int(x_sh + math.sin(swing_angle) * sw * AL * 1.0)
-            y_h  = int(y_sh + math.cos(swing_angle) * AL * 0.9 + AL * 0.1)
-
-        _limb(draw, [(x_sh, y_sh), (x_el, y_el), (x_h, y_h)], STICK_LINE, SLEEVE_W)
-    else:
-        # Фронтально — дві руки (ліва і права від плечей)
-        for side in (-1, 1):
-            sw   = side
-            x_sh = cx + int(SHIRT_W * 0.8 * sw)
-            y_sh = arm_y
-
-            # Руки гойдаються в протифазі: ліва рука + права нога вперед
-            swing_f = arm_phase * 0.4 * side  # рад
-
-            if emotion == 'surprised':
-                x_el = int(cx + SHIRT_W*sw + AL*sw*0.2)
-                x_h  = int(cx + SHIRT_W*sw*0.3)
-                y_el = int(arm_y - AL*0.25)
-                y_h  = int(arm_y - AL*0.85)
-            elif emotion == 'angry':
-                x_el = int(cx + SHIRT_W*sw + AL*sw*0.65)
-                x_h  = int(cx + SHIRT_W*sw + AL*sw*1.1)
-                y_el = int(arm_y + AL*0.15)
-                y_h  = int(arm_y - AL*0.15)
-            elif gesture == 'explain' and sw == front_sw:
-                x_el = int(cx + SHIRT_W*sw + AL*sw*0.25)
-                x_h  = int(cx + SHIRT_W*sw*0.6)
-                y_el = int(arm_y - AL*0.15)
-                y_h  = int(arm_y - AL*0.80)
-            else:
-                # Дуговий рух від плеча
-                x_el = int(x_sh + math.sin(swing_f) * sw * AL * 0.5 + sw * AL * 0.3)
-                y_el = int(y_sh + math.cos(swing_f) * AL * 0.5)
-                x_h  = int(x_sh + math.sin(swing_f) * sw * AL * 0.9 + sw * AL * 0.5)
-                y_h  = int(y_sh + math.cos(swing_f) * AL * 0.9 + AL * 0.1)
-
-            _limb(draw, [(x_sh, y_sh), (x_el, y_el), (x_h, y_h)], STICK_LINE, SLEEVE_W)
-
     # ── Куртка ──
     v_d  = NECK_Y + int(70*S)
     lw_s = int(34*S)  # ширина лацкану
@@ -924,6 +849,93 @@ def draw_char(draw, fi, cx, char_id, walking=False, direction=0, talking=False, 
             (tx_t-4,v_d-2),(tx_t+4,v_d-2),
             (tx_t+6,v_d+int(36*S)),(tx_t,v_d+int(52*S)),(tx_t-6,v_d+int(36*S))
         ], fill=tcol, outline=STICK_LINE, width=2)
+
+    # ── Руки ──
+    # Малюємо ПІСЛЯ куртки, щоб вони були зверху (видимі)
+    front_sw = 1 if facing_right else -1  # сторона "вперед" відносно напрямку
+    AL = int(ARM_LEN * 1.35)  # довші руки для кращого вигляду
+
+    if is_profile:
+        # Профіль — одна рука (передня)
+        sw   = front_sw
+        # Плечо: на краю куртки
+        x_sh = cx + int(jacket_w * 0.7 * sw)
+        y_sh = arm_y
+
+        if emotion == 'surprised':
+            x_el = int(x_sh + sw * AL * 0.3)
+            y_el = int(y_sh - AL * 0.4)
+            x_h  = int(x_sh + sw * AL * 0.3)
+            y_h  = int(y_sh - AL * 1.0)
+        elif emotion == 'angry':
+            x_el = int(x_sh + sw * AL * 0.5)
+            y_el = int(y_sh + AL * 0.1)
+            x_h  = int(x_sh + sw * AL * 1.0)
+            y_h  = int(y_sh - AL * 0.1)
+        elif gesture == 'explain':
+            x_el = int(x_sh + sw * AL * 0.4)
+            y_el = int(y_sh - AL * 0.1)
+            x_h  = int(x_sh + sw * AL * 0.7)
+            y_h  = int(y_sh - AL * 0.7)
+        else:
+            # Ходьба або спокій: правильний згин у лікті
+            # arm_phase: -1=рука ззаду, +1=рука спереду
+            swing_f = arm_phase * 0.8
+            
+            shoulder_angle = swing_f * 0.7  # амплітуда плеча
+            # Якщо рука йде вперед (swing_f > 0), лікоть згинається більше (~90 градусів)
+            # Якщо назад, лікоть майже прямий
+            elbow_bend = 0.1 if swing_f <= 0 else 0.1 + swing_f * 1.1
+            elbow_angle = shoulder_angle + elbow_bend
+            
+            U = AL * 0.5
+            L = AL * 0.5
+            
+            x_el = int(x_sh + math.sin(shoulder_angle) * sw * U)
+            y_el = int(y_sh + math.cos(shoulder_angle) * U)
+            
+            x_h = int(x_el + math.sin(elbow_angle) * sw * L)
+            y_h = int(y_el + math.cos(elbow_angle) * L)
+
+        _limb(draw, [(x_sh, y_sh), (x_el, y_el), (x_h, y_h)], STICK_LINE, SLEEVE_W)
+    else:
+        # Фронтально — дві руки (ліва і права від плечей)
+        for side in (-1, 1):
+            sw   = side
+            x_sh = cx + int(SHIRT_W * 0.8 * sw)
+            y_sh = arm_y
+
+            swing_f = arm_phase * 0.4 * side
+
+            if emotion == 'surprised':
+                x_el = int(cx + SHIRT_W*sw + AL*sw*0.2)
+                x_h  = int(cx + SHIRT_W*sw*0.3)
+                y_el = int(arm_y - AL*0.25)
+                y_h  = int(arm_y - AL*0.85)
+            elif emotion == 'angry':
+                x_el = int(cx + SHIRT_W*sw + AL*sw*0.65)
+                x_h  = int(cx + SHIRT_W*sw + AL*sw*1.1)
+                y_el = int(arm_y + AL*0.15)
+                y_h  = int(arm_y - AL*0.15)
+            elif gesture == 'explain' and sw == front_sw:
+                x_el = int(cx + SHIRT_W*sw + AL*sw*0.25)
+                x_h  = int(cx + SHIRT_W*sw*0.6)
+                y_el = int(arm_y - AL*0.15)
+                y_h  = int(arm_y - AL*0.80)
+            else:
+                shoulder_angle = swing_f * 0.5
+                base_out = 0.2
+                
+                U = AL * 0.5
+                L = AL * 0.5
+                
+                x_el = int(x_sh + (math.sin(shoulder_angle) + base_out) * sw * U)
+                y_el = int(y_sh + math.cos(shoulder_angle) * U)
+                
+                x_h = int(x_el + (math.sin(shoulder_angle) * 1.5 + base_out) * sw * L)
+                y_h = int(y_el + math.cos(shoulder_angle) * L)
+
+            _limb(draw, [(x_sh, y_sh), (x_el, y_el), (x_h, y_h)], STICK_LINE, SLEEVE_W)
 
     # ── Ноги — ПРАВИЛЬНИЙ walk cycle (4 ключові пози) ──
     if walking:
