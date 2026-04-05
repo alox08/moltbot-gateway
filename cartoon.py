@@ -776,6 +776,27 @@ def draw_ponytail(draw, cx, facing_right):
     gx, gy = pts[n//2]
     draw.ellipse([gx-6, gy-6, gx+6, gy+6], fill=(215,45,45))
 
+def _bezier_curve(p0, p1, p2, steps=6):
+    """Генерує точки квадратичної кривої Безьє (плавний згин/нудл-рука)."""
+    pts = []
+    for i in range(steps + 1):
+        t = i / steps
+        x = (1-t)**2 * p0[0] + 2*(1-t)*t * p1[0] + t**2 * p2[0]
+        y = (1-t)**2 * p0[1] + 2*(1-t)*t * p1[1] + t**2 * p2[1]
+        pts.append((int(x), int(y)))
+    return pts
+
+def draw_fist(draw, x, y, facing_right):
+    """Малює невеличкий кулак з пальцями на кінці руки."""
+    # Основа кулака
+    fr = max(3, int(8*S))  # радіус
+    draw.ellipse([x-fr, y-fr, x+fr, y+fr], fill=WHITE, outline=STICK_LINE, width=2)
+    # Пальці (3 лінії)
+    dir_x = 1 if facing_right else -1
+    for i in range(-1, 2):
+        fy = y + i * int(3*S)
+        draw.line([(x + dir_x*fr*0.5, fy), (x + dir_x*fr*1.2, fy)], fill=STICK_LINE, width=1)
+
 # ─── Персонаж — South Park стиль (ходьба боком) ──────────────────────────────
 
 def draw_char(draw, fi, cx, char_id, walking=False, direction=0, talking=False, emotion='normal', gesture=None, facing_camera=False):
@@ -816,6 +837,71 @@ def draw_char(draw, fi, cx, char_id, walking=False, direction=0, talking=False, 
     if hair == 'ponytail':
         draw_ponytail(draw, cx, facing_right)
 
+    # Функція розрахунку точок руки (плече, контрольна ліктя, кисть)
+    def calc_arm(sw, is_far_arm=False):
+        AL = int(ARM_LEN * 1.35)
+        x_sh = cx + int((hip_w * 0.5 * 0.3) * sw) if is_profile else cx + int(SHIRT_W * 0.8 * sw)
+        y_sh = arm_y
+
+        # Фаза для цієї руки. Дальня рука рухається в протифазі до ближньої
+        cur_phase = -arm_phase if is_far_arm else arm_phase
+        
+        if emotion == 'surprised':
+            x_el = int(x_sh + sw * AL * 0.3)
+            y_el = int(y_sh - AL * 0.4)
+            x_h  = int(x_sh + sw * AL * 0.3)
+            y_h  = int(y_sh - AL * 1.0)
+        elif emotion == 'angry':
+            x_el = int(x_sh + sw * AL * 0.5)
+            y_el = int(y_sh + AL * 0.1)
+            x_h  = int(x_sh + sw * AL * 1.0)
+            y_h  = int(y_sh - AL * 0.1)
+        elif gesture == 'explain' and not is_far_arm:
+            x_el = int(x_sh + sw * AL * 0.4)
+            y_el = int(y_sh - AL * 0.1)
+            x_h  = int(x_sh + sw * AL * 0.7)
+            y_h  = int(y_sh - AL * 0.7)
+        else:
+            if is_profile:
+                swing_f = cur_phase * 0.8
+                shoulder_angle = swing_f * 0.7
+                elbow_bend = 0.1 if swing_f <= 0 else 0.1 + swing_f * 1.1
+                elbow_angle = shoulder_angle + elbow_bend
+            else:
+                swing_f = cur_phase * 0.4 * sw
+                shoulder_angle = swing_f * 0.5
+                elbow_bend = 0.1 if swing_f <= 0 else 0.1 + swing_f * 0.5
+                elbow_angle = shoulder_angle + elbow_bend * sw
+
+            U = AL * 0.5
+            L = AL * 0.5
+            x_el = int(x_sh + math.sin(shoulder_angle) * sw * U)
+            y_el = int(y_sh + math.cos(shoulder_angle) * U)
+            if not is_profile:
+                x_el += int(0.2 * sw * U)
+            x_h = int(x_el + math.sin(elbow_angle) * sw * L)
+            y_h = int(y_el + math.cos(elbow_angle) * L)
+            if not is_profile:
+                x_h += int(0.2 * sw * L)
+
+        # Контрольна точка Безьє для гладкого ліктя
+        x_cp = x_el * 2 - (x_sh + x_h) / 2
+        y_cp = y_el * 2 - (y_sh + y_h) / 2
+        return x_sh, y_sh, x_cp, y_cp, x_h, y_h
+
+    # ── Задня рука (Дальня) малюється ДО куртки ──
+    front_sw = 1 if facing_right else -1
+
+    if is_profile:
+        far_sw = -front_sw
+        x_sh, y_sh, x_cp, y_cp, x_h, y_h = calc_arm(far_sw, is_far_arm=True)
+        pts = _bezier_curve((x_sh, y_sh), (x_cp, y_cp), (x_h, y_h))
+        _limb(draw, pts, (25, 25, 25), SLEEVE_W)  # трохи темніша
+        draw_fist(draw, x_h, y_h, far_sw > 0)
+    else:
+        # У фронтальному вигляді ми просто малюємо обидві руки ПІСЛЯ куртки
+        pass
+
     # ── Куртка ──
     v_d  = NECK_Y + int(70*S)
     lw_s = int(34*S)  # ширина лацкану
@@ -850,92 +936,19 @@ def draw_char(draw, fi, cx, char_id, walking=False, direction=0, talking=False, 
             (tx_t+6,v_d+int(36*S)),(tx_t,v_d+int(52*S)),(tx_t-6,v_d+int(36*S))
         ], fill=tcol, outline=STICK_LINE, width=2)
 
-    # ── Руки ──
-    # Малюємо ПІСЛЯ куртки, щоб вони були зверху (видимі)
-    front_sw = 1 if facing_right else -1  # сторона "вперед" відносно напрямку
-    AL = int(ARM_LEN * 1.35)  # довші руки для кращого вигляду
-
+    # ── Передня рука (Ближня) малюється ПІСЛЯ куртки ──
     if is_profile:
-        # Профіль — одна рука (передня)
-        sw   = front_sw
-        # Плечо: на краю куртки
-        x_sh = cx + int(jacket_w * 0.7 * sw)
-        y_sh = arm_y
-
-        if emotion == 'surprised':
-            x_el = int(x_sh + sw * AL * 0.3)
-            y_el = int(y_sh - AL * 0.4)
-            x_h  = int(x_sh + sw * AL * 0.3)
-            y_h  = int(y_sh - AL * 1.0)
-        elif emotion == 'angry':
-            x_el = int(x_sh + sw * AL * 0.5)
-            y_el = int(y_sh + AL * 0.1)
-            x_h  = int(x_sh + sw * AL * 1.0)
-            y_h  = int(y_sh - AL * 0.1)
-        elif gesture == 'explain':
-            x_el = int(x_sh + sw * AL * 0.4)
-            y_el = int(y_sh - AL * 0.1)
-            x_h  = int(x_sh + sw * AL * 0.7)
-            y_h  = int(y_sh - AL * 0.7)
-        else:
-            # Ходьба або спокій: правильний згин у лікті
-            # arm_phase: -1=рука ззаду, +1=рука спереду
-            swing_f = arm_phase * 0.8
-            
-            shoulder_angle = swing_f * 0.7  # амплітуда плеча
-            # Якщо рука йде вперед (swing_f > 0), лікоть згинається більше (~90 градусів)
-            # Якщо назад, лікоть майже прямий
-            elbow_bend = 0.1 if swing_f <= 0 else 0.1 + swing_f * 1.1
-            elbow_angle = shoulder_angle + elbow_bend
-            
-            U = AL * 0.5
-            L = AL * 0.5
-            
-            x_el = int(x_sh + math.sin(shoulder_angle) * sw * U)
-            y_el = int(y_sh + math.cos(shoulder_angle) * U)
-            
-            x_h = int(x_el + math.sin(elbow_angle) * sw * L)
-            y_h = int(y_el + math.cos(elbow_angle) * L)
-
-        _limb(draw, [(x_sh, y_sh), (x_el, y_el), (x_h, y_h)], STICK_LINE, SLEEVE_W)
+        x_sh, y_sh, x_cp, y_cp, x_h, y_h = calc_arm(front_sw, is_far_arm=False)
+        pts = _bezier_curve((x_sh, y_sh), (x_cp, y_cp), (x_h, y_h))
+        _limb(draw, pts, STICK_LINE, SLEEVE_W)
+        draw_fist(draw, x_h, y_h, front_sw > 0)
     else:
-        # Фронтально — дві руки (ліва і права від плечей)
+        # Фронтально — дві руки
         for side in (-1, 1):
-            sw   = side
-            x_sh = cx + int(SHIRT_W * 0.8 * sw)
-            y_sh = arm_y
-
-            swing_f = arm_phase * 0.4 * side
-
-            if emotion == 'surprised':
-                x_el = int(cx + SHIRT_W*sw + AL*sw*0.2)
-                x_h  = int(cx + SHIRT_W*sw*0.3)
-                y_el = int(arm_y - AL*0.25)
-                y_h  = int(arm_y - AL*0.85)
-            elif emotion == 'angry':
-                x_el = int(cx + SHIRT_W*sw + AL*sw*0.65)
-                x_h  = int(cx + SHIRT_W*sw + AL*sw*1.1)
-                y_el = int(arm_y + AL*0.15)
-                y_h  = int(arm_y - AL*0.15)
-            elif gesture == 'explain' and sw == front_sw:
-                x_el = int(cx + SHIRT_W*sw + AL*sw*0.25)
-                x_h  = int(cx + SHIRT_W*sw*0.6)
-                y_el = int(arm_y - AL*0.15)
-                y_h  = int(arm_y - AL*0.80)
-            else:
-                shoulder_angle = swing_f * 0.5
-                base_out = 0.2
-                
-                U = AL * 0.5
-                L = AL * 0.5
-                
-                x_el = int(x_sh + (math.sin(shoulder_angle) + base_out) * sw * U)
-                y_el = int(y_sh + math.cos(shoulder_angle) * U)
-                
-                x_h = int(x_el + (math.sin(shoulder_angle) * 1.5 + base_out) * sw * L)
-                y_h = int(y_el + math.cos(shoulder_angle) * L)
-
-            _limb(draw, [(x_sh, y_sh), (x_el, y_el), (x_h, y_h)], STICK_LINE, SLEEVE_W)
+            x_sh, y_sh, x_cp, y_cp, x_h, y_h = calc_arm(side, is_far_arm=False)
+            pts = _bezier_curve((x_sh, y_sh), (x_cp, y_cp), (x_h, y_h))
+            _limb(draw, pts, STICK_LINE, SLEEVE_W)
+            draw_fist(draw, x_h, y_h, side > 0)
 
     # ── Ноги — ПРАВИЛЬНИЙ walk cycle (4 ключові пози) ──
     if walking:
