@@ -26,7 +26,7 @@ except ImportError:
 #
 #   1280 × 720 (16:9) — стандарт мультиків (South Park, Family Guy...)
 #   Персонажі ~35% висоти кадру — пропорційні будівлям на фоні
-#   VERSION: 2026-04-04-knee-fwd-always
+#    VERSION: 2026-04-05-proper-walk-cycle
 #
 W, H       = 1280, 720
 FPS        = 25
@@ -803,14 +803,16 @@ def draw_char(draw, fi, cx, char_id, walking=False, direction=0, talking=False, 
 
     # Руки в протифазі з ногами при ходьбі
     # Якщо права нога попереду — ліва рука попереду (і навпаки)
-    arm_phase = 0
-    arm_len_mult = 1.0  # множник довжини рук (збільшується при ходьбі)
+    # walk_phase: 0→1 за 24 кадри (єдине джерело фази для рук і ніг)
+    walk_phase   = (fi % 24) / 24.0
+    arm_phase    = 0.0
+    arm_len_mult = 1.0
     if walking:
-        # Використовуємо той самий cycle що й для ніг
-        arm_cycle = (fi // 3) % 12
-        # Руки в протифазі: коли ноги в contact (cycle 0-2), ліва рука вперед
-        arm_phase = math.sin(arm_cycle * math.pi / 6)  # плавний синус
-        arm_len_mult = 1.35  # руки довші при ходьбі (+35%)
+        # Руки в ПРОТИФАЗІ з ногами: -cos дає правильну опозицію
+        # walk_phase=0 → права нога СПЕРЕДУ → права рука ЗЗАДУ (arm_phase=-1)
+        _wd_arm  = 1 if facing_right else -1
+        arm_phase    = -math.cos(walk_phase * 2 * math.pi) * _wd_arm
+        arm_len_mult = 1.3
 
     # Хвіст (перед головою — голова перекриє)
     if hair == 'ponytail':
@@ -919,84 +921,87 @@ def draw_char(draw, fi, cx, char_id, walking=False, direction=0, talking=False, 
             (tx_t+6,v_d+int(36*S)),(tx_t,v_d+int(52*S)),(tx_t-6,v_d+int(36*S))
         ], fill=tcol, outline=STICK_LINE, width=2)
 
-    # ── Ноги — синусоїдний walk cycle ──
+    # ── Ноги — ПРАВИЛЬНИЙ walk cycle (4 ключові пози) ──
     if walking:
         #
-        # СИНУСОЇДНА ХОДА (плавна, без стрибків між фазами):
-        #   phase = fi * π/12  →  повний цикл = 24 кадри (≈1 сек при 25fps)
-        #   Ліва і права нога в протифазі (зсув π)
+        # Contact (t=0.0): права нога СПЕРЕДУ (+stride), ліва ЗЗАДУ (-stride), обидві на землі
+        # Down    (t=0.125): вага переходить на передню ногу, тіло ОПУСКАЄТЬСЯ
+        # Passing (t=0.25):  ліва нога проходить через центр (найвища точка тіла)
+        # Up      (t=0.375): ліва нога летить вперед, тіло ПІДНІМАЄТЬСЯ
+        # (потім зеркально для лівої ноги)
         #
-        # Гарантія правильних колін:
-        #   knee_x = mid_x + wd * abs(fwd)   ← ЗАВЖДИ вперед по напрямку ходьби
-        #   knee_y = mid_y + extra_down       ← нижче середини (природно)
+        # Ground phase (t 0→0.5): нога СТОЇТЬ на землі і ковзає назад
+        # Swing  phase (t 0.5→1): нога ЛЕТИТЬ параболічною дугою вперед
         #
 
-        stride    = int(72 * S)   # довжина кроку px
-        lift      = int(42 * S)   # висота підйому ноги px
-        body_bob  = int(6  * S)   # амплітуда гойдання тіла
-        phase     = fi * math.pi / 12   # кутова швидкість
+        stride  = int(65 * S)   # половина довжини кроку (px)
+        lift_h  = int(28 * S)   # максимальна висота підйому стопи (px)
+        bob_amp = int(8  * S)   # амплітуда вертикального гойдання тіла (px)
 
-        # Напрямок (+1 = вправо, -1 = вліво)
-        wd = 1 if facing_right else -1
+        wd = 1 if facing_right else -1  # напрямок: +1=вправо, -1=вліво
 
         if is_profile:
-            hip_y = HIP_Y + 6 + int(math.sin(phase * 2) * body_bob)
+            # Body bob: тіло ВГОРІ на Passing (t=0.25,0.75), ВНИЗУ на Contact (t=0, 0.5)
+            # Два підйоми за повний цикл (один на крок)
+            body_rise = abs(math.sin(walk_phase * math.pi * 2))
+            hip_y = HIP_Y + 6 + int((1.0 - body_rise) * bob_amp)
             hip_x = cx
 
-            # ── Генеруємо дві ноги синусоїдно ──
-            # Ліва нога: phase+π  (протифаза)
-            # Права нога: phase
             legs = []
-            for ph in (phase, phase + math.pi):
-                sin_p = math.sin(ph)
+            for leg_offset in (0.0, 0.5):   # нога 0=права, нога 1=ліва
+                t = (walk_phase + leg_offset) % 1.0
 
-                # Stopa: рухається ±stride у напрямку ходьби
-                foot_x = cx + int(sin_p * stride * wd)
+                if t < 0.5:
+                    # GROUND PHASE: стопа НА ЗЕМЛІ, рухається ззаду наперед
+                    # t=0 → стопа СПЕРЕДУ (cx+stride), t=0.5 → стопа ЗЗАДУ (cx-stride)
+                    gf    = t / 0.5          # 0→1
+                    foot_x = int(cx + wd * stride * (1.0 - 2.0 * gf))
+                    foot_y = GROUND_Y
+                else:
+                    # SWING PHASE: стопа ЛЕТИТЬ параболічною дугою
+                    # t=0.5 → стопа ЗЗАДУ (cx-stride), t=1.0 → стопа СПЕРЕДУ (cx+stride)
+                    sf    = (t - 0.5) / 0.5  # 0→1
+                    foot_x = int(cx + wd * stride * (2.0 * sf - 1.0))
+                    # Парабола: пік на sf=0.5 (середина маху)
+                    foot_y = GROUND_Y - int(math.sin(sf * math.pi) * lift_h)
 
-                # Підйом стопи: тільки коли sin > 0 (нога летить вперед)
-                sw_factor = max(0.0, sin_p) ** 1.5
-                foot_y = GROUND_Y - int(sw_factor * lift)
-
-                # Коліно: середина між стегном і стопою
-                mid_x = (hip_x + foot_x) / 2
-                mid_y = (hip_y  + foot_y) / 2
-
-                # ─── КЛЮЧОВИЙ ФІКС: коліно ЗАВЖДИ вперед ─────────────
-                # Обчислюємо геометричний виступ коліна
-                dx = foot_x - hip_x
-                dy = foot_y - hip_y
-                seg_half = math.hypot(dx, dy) / 2
-                thigh = int(88 * S)
-                # Скільки можна виштовхнути коліно перпендикулярно
+                # Коліно: завжди гнеться ВПЕРЕД по напрямку ходьби
+                mid_x   = (hip_x + foot_x) / 2.0
+                mid_y   = (hip_y  + foot_y) / 2.0
+                dx      = foot_x - hip_x
+                dy      = foot_y - hip_y
+                seg_half = math.hypot(dx, dy) / 2.0
+                thigh   = int(88 * S)
                 push_sq = max(0.0, thigh * thigh - seg_half * seg_half)
-                push = math.sqrt(push_sq) if push_sq > 0 else int(18 * S)
-                fwd_push = min(push, int(34 * S))  # обмеження щоб не виглядало дивно
+                push    = math.sqrt(push_sq) if push_sq > 0 else int(16 * S)
+                fwd_push = min(push, int(28 * S))
+                knee_x  = int(mid_x + wd * fwd_push)
+                knee_y  = int(mid_y + int(5 * S))
 
-                # abs() + wd → МАТЕМАТИЧНО НЕМОЖЛИВО щоб коліно гнулось назад
-                knee_x = int(mid_x + wd * fwd_push)
-                knee_y = int(mid_y + int(8 * S))   # трохи нижче середини
-                # ─────────────────────────────────────────────────────
+                legs.append({'knee': (knee_x, knee_y), 'foot': (foot_x, foot_y)})
 
-                legs.append({
-                    'knee': (knee_x, knee_y),
-                    'foot': (foot_x, foot_y),
-                })
-
-            # legs[0] = права нога (phase), legs[1] = ліва (phase+π)
+            # legs[0]=права нога (offset=0), legs[1]=ліва (offset=0.5)
             rknee, rfoot = legs[0]['knee'], legs[0]['foot']
             lknee, lfoot = legs[1]['knee'], legs[1]['foot']
 
         else:
-            # Фронтально — ноги в сторони
-            dir_m  = 1 if facing_right else -1
-            l_sw   = math.sin(phase) * stride * dir_m
-            l_li   = max(0, math.sin(phase)) * lift
-            r_sw   = math.sin(phase+math.pi) * stride * dir_m
-            r_li   = max(0, math.sin(phase+math.pi)) * lift
-            lknee  = (cx-int(48*S)+int(l_sw*0.5), HIP_Y+int(85*S)-int(l_li*0.5))
-            lfoot  = (cx-int(48*S)+int(l_sw),      GROUND_Y-int(l_li))
-            rknee  = (cx+int(48*S)+int(r_sw*0.5),  HIP_Y+int(85*S)-int(r_li*0.5))
-            rfoot  = (cx+int(48*S)+int(r_sw),       GROUND_Y-int(r_li))
+            # Фронтально — та сама логіка але ноги в сторони (±48*S від центру)
+            legs_f = []
+            for leg_offset in (0.0, 0.5):
+                t = (walk_phase + leg_offset) % 1.0
+                if t < 0.5:
+                    gf = t / 0.5
+                    sw_x = int(stride * (1.0 if facing_right else -1.0) * (1.0 - 2.0 * gf))
+                    sw_y = 0
+                else:
+                    sf = (t - 0.5) / 0.5
+                    sw_x = int(stride * (1.0 if facing_right else -1.0) * (2.0 * sf - 1.0))
+                    sw_y = int(math.sin(sf * math.pi) * lift_h)
+                legs_f.append((sw_x, sw_y))
+            rknee = (cx+int(48*S)+legs_f[0][0]//2, HIP_Y+int(85*S)-legs_f[0][1]//2)
+            rfoot = (cx+int(48*S)+legs_f[0][0],    GROUND_Y-legs_f[0][1])
+            lknee = (cx-int(48*S)+legs_f[1][0]//2, HIP_Y+int(85*S)-legs_f[1][1]//2)
+            lfoot = (cx-int(48*S)+legs_f[1][0],    GROUND_Y-legs_f[1][1])
     else:
         if is_profile:
             # Профіль стоячи — ТІЛЬКИ ОДНА нога (передня) з ЦЕНТРУ
